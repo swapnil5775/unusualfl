@@ -1,12 +1,13 @@
-import streamlit as st
+from flask import Flask, render_template_string
 import requests
 import os
 
+app = Flask(__name__)
+
 # API configuration
-API_KEY = os.getenv("APIKEY")
+APIKEY = os.getenv("APIKEY")
 API_URL = "https://api.unusualwhales.com/api/option-trades/flow-alerts"
 
-# Function to fetch data
 def get_option_flow():
     headers = {"Authorization": f"Bearer {APIKEY}"}
     params = {"limit": 100}
@@ -14,25 +15,32 @@ def get_option_flow():
         response = requests.get(API_URL, headers=headers, params=params)
         response.raise_for_status()
         return response.json()
-    except requests.RequestException as e:
-        st.error(f"Error fetching data: {e}")
+    except requests.RequestException:
         return None
 
-# Streamlit GUI
-st.title("Unusual Whales Option Flow Alerts")
-st.write("Displaying trades with size = 1001")
-
-if not API_KEY:
-    st.error("API_KEY not set. Please configure it in Vercel.")
-else:
+@app.route('/')
+def display_trades():
+    if not APIKEY:
+        return "Error: APIKEY not set. Please configure it in Vercel."
     data = get_option_flow()
     if data:
         filtered_trades = [trade for trade in data if trade.get("size") == 1001]
         if filtered_trades:
-            st.write(f"Found {len(filtered_trades)} trades with size = 1001:")
-            # Display as a simple table without pandas
-            st.table(filtered_trades)
+            # Simple HTML table
+            table_html = "<table border='1'><tr><th>Trade Details</th></tr>"
+            for trade in filtered_trades:
+                table_html += f"<tr><td>{trade}</td></tr>"
+            table_html += "</table>"
+            html = f"""
+            <h1>Unusual Whales Option Flow Alerts</h1>
+            <p>Found {len(filtered_trades)} trades with size = 1001:</p>
+            {table_html}
+            """
         else:
-            st.write("No trades with size = 1001 found in the latest data.")
+            html = "<h1>Unusual Whales Option Flow Alerts</h1><p>No trades with size = 1001 found.</p>"
     else:
-        st.write("Failed to retrieve data from the API.")
+        html = "<h1>Unusual Whales Option Flow Alerts</h1><p>Failed to retrieve data from the API.</p>"
+    return render_template_string(html)
+
+if __name__ == "__main__":
+    app.run()
