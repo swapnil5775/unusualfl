@@ -1,5 +1,6 @@
 from flask import Flask, render_template_string
 import requests
+import json
 
 app = Flask(__name__)
 
@@ -13,9 +14,12 @@ def get_option_flow():
     try:
         response = requests.get(API_URL, headers=headers, params=params)
         response.raise_for_status()
-        return response.json()
+        # Return raw text and parsed JSON for debugging
+        return {"text": response.text, "json": response.json()}
     except requests.RequestException as e:
         return {"error": f"API Error: {str(e)} - Status Code: {e.response.status_code if e.response else 'No response'}"}
+    except json.JSONDecodeError as e:
+        return {"error": f"JSON Parse Error: {str(e)} - Raw Response: {response.text}"}
 
 @app.route('/')
 def display_trades():
@@ -27,28 +31,7 @@ def display_trades():
             <p>{data['error']}</p>
             """
         else:
-            filtered_trades = [trade for trade in data if trade.get("size") == 1001]
-            if filtered_trades:
-                table_html = "<table border='1'><tr><th>Trade Details</th></tr>"
-                for trade in filtered_trades:
-                    table_html += f"<tr><td>{trade}</td></tr>"
-                table_html += "</table>"
-                html = f"""
-                <h1>Unusual Whales Option Flow Alerts</h1>
-                <p>Found {len(filtered_trades)} trades with size = 1001:</p>
-                {table_html}
-                """
-            else:
-                html = """
-                <h1>Unusual Whales Option Flow Alerts</h1>
-                <p>No trades with size = 1001 found in the latest data.</p>
-                """
-        return render_template_string(html)
-    except Exception as e:
-        return render_template_string("""
-        <h1>Unusual Whales Option Flow Alerts</h1>
-        <p>Internal Server Error: {{ error }}</p>
-        """, error=str(e))
-
-if __name__ == "__main__":
-    app.run()
+            # Debug: Show raw response
+            raw_response = data["text"]
+            parsed_data = data["json"]
+            if isinstance(parsed_data
