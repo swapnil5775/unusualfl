@@ -3,7 +3,7 @@ import requests
 import pandas as pd
 import os
 
-API_KEY = os.getenv("API_KEY")
+API_KEY = os.getenv("APIKEY")
 API_URL = "https://api.unusualwhales.com/api/option-trades/flow-alerts"
 
 def get_option_flow():
