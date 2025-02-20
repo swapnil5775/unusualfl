@@ -112,7 +112,7 @@ def option_flow():
     data = get_api_data(FLOW_API_URL, params=params)
     trades = data.get("data", []) if "error" not in data else []
 
-    # Filter by date (client-side approximation since API might not support exact date filtering)
+    # Filter by date (client-side approximation)
     trades = [t for t in trades if datetime.fromtimestamp(t.get('start_time', 0)/1000).strftime('%Y-%m-%d') == date]
 
     # Sort trades
@@ -192,7 +192,6 @@ def option_flow():
 
 @app.route('/collect_past_data', methods=['POST'])
 def collect_past_data():
-    # Simplified for Vercel: processes only the latest day to stay within timeout limits
     date = datetime.utcnow().strftime('%Y-%m-%d')
     params = {"limit": 500, "offset": 0}
     data = get_api_data(FLOW_API_URL, params=params)
@@ -385,10 +384,6 @@ def market_tide():
             """
     return render_template_string(html)
 
-# Vercel serverless handler
-def handler(request):
-    from wsgiref.handlers import CGIHandler
-    return CGIHandler().run(app)
-
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=True)
