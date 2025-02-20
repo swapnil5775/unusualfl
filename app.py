@@ -387,12 +387,18 @@ def seasonality_etf_market():
         response = get_api_data(SEASONALITY_MARKET_API_URL)
         if "error" in response:
             error = response["error"]
-            # Log the error to Vercel logs for debugging
+            # Log detailed error to Vercel logs for debugging
             print(f"API Error for {SEASONALITY_MARKET_API_URL}: {error}")
+            print(f"Raw API response: {response.get('raw', 'No raw data available')}")
         else:
             all_data = response.get("data", [])
+            # Log the raw data for debugging
+            print(f"API Response Data Length for {SEASONALITY_MARKET_API_URL}: {len(all_data)}")
+            print(f"Sample of API Response: {all_data[:5] if all_data else 'Empty data'}")
             # Filter data based on the selected ticker (or show all if 'ALL')
             data = [item for item in all_data if item['ticker'] == ticker] if ticker != 'ALL' else all_data
+            # Log filtered data length
+            print(f"Filtered Data Length for ticker '{ticker}': {len(data)}")
     except Exception as e:
         error = f"Unexpected error fetching data: {str(e)}"
         print(f"Unexpected Error in seasonality_etf_market: {str(e)}")
@@ -481,7 +487,6 @@ def seasonality_etf_market():
     </script>
     """
     return render_template_string(html)
-
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
