@@ -10,7 +10,7 @@ APIKEY = "bd0cf36c-5072-4b1e-87ee-7e278b8a02e5"
 FLOW_API_URL = "https://api.unusualwhales.com/api/option-trades/flow-alerts"
 INST_LIST_API_URL = "https://api.unusualwhales.com/api/institutions"
 INST_HOLDINGS_API_URL = "https://api.unusualwhales.com/api/institution/{name}/holdings"
-MARKET_TIDE_API_URL = "https://api.unusualwhales.com/api/v1/market-tide"
+MARKET_TIDE_API_URL = "https://api.unusualwhales.com/api/market-tide"  # Updated endpoint
 
 def get_api_data(url, params=None):
     headers = {"Authorization": f"Bearer {APIKEY}"}
@@ -19,7 +19,7 @@ def get_api_data(url, params=None):
         response.raise_for_status()
         return response.json()
     except (requests.RequestException, json.JSONDecodeError) as e:
-        return {"error": str(e)}
+        return {"error": f"{str(e)} - URL: {response.url if 'response' in locals() else url}"}
 
 # Menu bar template
 MENU_BAR = """
@@ -254,7 +254,7 @@ def research():
 @app.route('/market-tide', methods=['GET'])
 def market_tide():
     ticker = request.args.get('ticker', 'SPY')
-    date = request.args.get('date', datetime.utcnow().strftime('%Y-%m-%d'))
+    date = request.args.get('date', '2023-01-01')  # Default to a past date with data
 
     params = {"ticker": ticker, "date": date}
     data = get_api_data(MARKET_TIDE_API_URL, params=params)
