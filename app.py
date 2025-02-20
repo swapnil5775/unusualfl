@@ -383,22 +383,26 @@ def seasonality_etf_market():
     error = None
 
     # Fetch all ETF seasonality data from the market endpoint
-    response = get_api_data(SEASONALITY_MARKET_API_URL)
-    if "error" in response:
-        error = response["error"]
-        # Log the error for debugging (optional, for local development)
-        print(f"API Error for {SEASONALITY_MARKET_API_URL}: {error}")
-    else:
-        all_data = response.get("data", [])
-        # Filter data based on the selected ticker (or show all if 'ALL')
-        data = [item for item in all_data if item['ticker'] == ticker] if ticker != 'ALL' else all_data
+    try:
+        response = get_api_data(SEASONALITY_MARKET_API_URL)
+        if "error" in response:
+            error = response["error"]
+            # Log the error to Vercel logs for debugging
+            print(f"API Error for {SEASONALITY_MARKET_API_URL}: {error}")
+        else:
+            all_data = response.get("data", [])
+            # Filter data based on the selected ticker (or show all if 'ALL')
+            data = [item for item in all_data if item['ticker'] == ticker] if ticker != 'ALL' else all_data
+    except Exception as e:
+        error = f"Unexpected error fetching data: {str(e)}"
+        print(f"Unexpected Error in seasonality_etf_market: {str(e)}")
 
     # List of ETF tickers for buttons (defined globally)
     etf_tickers = ['SPY', 'QQQ', 'IWM', 'XLE', 'XLC', 'XLK', 'XLV', 'XLP', 'XLY', 'XLRE', 'XLF', 'XLI', 'XLB']
 
-    html = f"""
+    html = """
     <h1>Seasonality - ETF Market</h1>
-    {MENU_BAR}
+    """ + MENU_BAR + """
     <div>
         <h3>Select ETF or View All:</h3>
         <div>
@@ -410,7 +414,7 @@ def seasonality_etf_market():
         """
     html += """
         </div>
-        {% if error %}<p style="color: red;">Error: {{ error }}</p>{% endif %}
+        {% if error %}<p style="color: red;">Error: {{ error|safe }}</p>{% endif %}
         {% if not error and not data %}<p>No data available for ticker {{ ticker }}</p>{% endif %}
         <table border='1' {% if not data %}style="display: none;"{% endif %} id="etfMarketTable">
             <tr>
