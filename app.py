@@ -2,9 +2,6 @@ import os
 from flask import Flask, render_template_string, request, jsonify
 import requests
 import json
-from datetime import datetime, timedelta
-import psycopg2
-from psycopg2.extras import RealDictCursor
 
 app = Flask(__name__)
 
@@ -12,44 +9,7 @@ app = Flask(__name__)
 APIKEY = "bd0cf36c-5072-4b1e-87ee-7e278b8a02e5"
 INST_LIST_API_URL = "https://api.unusualwhales.com/api/institutions"
 INST_HOLDINGS_API_URL = "https://api.unusualwhales.com/api/institution/{name}/holdings"
-
-# Database connection for Neon Postgres
-def get_db_connection():
-    try:
-        conn = psycopg2.connect(os.environ["POSTGRES_URL"], cursor_factory=RealDictCursor)
-        return conn
-    except KeyError:
-        raise Exception("POSTGRES_URL environment variable not set. Please configure it in Vercel with your Neon connection string for 'option_flow_past_15'.")
-    except psycopg2.Error as e:
-        raise Exception(f"Database connection failed for 'option_flow_past_15': {str(e)}")
-
-# Initialize database table (keeping for consistency, though not used now)
-def init_db():
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS trades (
-                id SERIAL PRIMARY KEY,
-                ticker TEXT,
-                type TEXT,
-                strike REAL,
-                price REAL,
-                total_size INTEGER,
-                expiry TEXT,
-                start_time BIGINT,
-                total_premium REAL,
-                alert_rule TEXT,
-                trade_date DATE
-            )
-        """)
-        conn.commit()
-        cur.close()
-        conn.close()
-    except Exception as e:
-        print(f"Failed to initialize database 'option_flow_past_15': {str(e)}")
-
-init_db()  # Run on startup
+SEASONALITY_API_URL = "https://api.unusualwhales.com/api/seasonality/{ticker}/monthly"
 
 def get_api_data(url, params=None):
     headers = {"Authorization": f"Bearer {APIKEY}"}
@@ -58,13 +18,14 @@ def get_api_data(url, params=None):
         response.raise_for_status()
         return response.json()
     except (requests.RequestException, json.JSONDecodeError) as e:
-        return {"error": f"{str(e)} - URL: {response.url if 'response' in locals() else url}", "raw": response.text if 'response' in locals() else ""}
+        return {"error": f"{str(e)} - URL: {url}", "raw": response.text if 'response' in locals() else ""}
 
 MENU_BAR = """
 <div style="background-color: #f8f8f8; padding: 10px;">
     <a href="/" style="margin-right: 20px;">Home</a>
     <a href="/institution/list" style="margin-right: 20px;">Institution List</a>
     <a href="/research" style="margin-right: 20px;">Research</a>
+    <a href="/seasonality" style="margin-right: 20px;">Seasonality</a>
 </div>
 """
 
@@ -248,6 +209,82 @@ def research():
     {table_html}
     <h2>Top 10 Holdings by Institution</h2>
     {chart_html}
+    """
+    return render_template_string(html)
+
+@app.route('/seasonality')
+def seasonality():
+    html = f"""
+    <h1>Seasonality</h1>
+    {MENU_BAR}
+    <p>Select a sub-page or ticker to view seasonality data.</p>
+    <ul>
+        <li><a href="/seasonality/per-ticker">Per Ticker</a></li>
+    </ul>
+    """
+    return render_template_string(html)
+
+@app.route('/seasonality/per-ticker', methods=['GET'])
+def seasonality_per_ticker():
+    ticker = request.args.get('ticker', '').upper()  # Default to empty, convert to uppercase
+    data = None
+    error = None
+
+    if ticker:
+        url = SEASONALITY_API_URL.format(ticker=ticker)
+        response = get_api_data(url)
+        if "error" in response:
+            error = response["error"]
+        else:
+            data = response.get("data", [])
+
+    html = f"""
+    <h1>Seasonality - Per Ticker</h1>
+    {MENU_BAR}
+    <div>
+        <form method="GET">
+            <label>Enter Ticker (e.g., AAPL, TSLA): </label>
+            <input type="text" name="ticker" value="{ticker}" placeholder="Enter ticker symbol">
+            <button type="submit">GO</button>
+        </form>
+        {'<p style="color: red;">Error: ' + error + '</p>' if error else ''}
+        {'<p>No data available for ticker ' + ticker + '</p>' if not error and not data else ''}
+        <table border='1' {'style="display: none;"' if not data else ''} id="seasonalityTable">
+            <tr>
+                <th>Month</th>
+                <th>Avg Change</th>
+                <th>Max Change</th>
+                <th>Median Change</th>
+                <th>Min Change</th>
+                <th>Positive Closes</th>
+                <th>Positive Months %</th>
+                <th>Years</th>
+            </tr>
+    """
+    if data:
+        for item in data:
+            html += f"""
+            <tr>
+                <td>{item['month']}</td>
+                <td>{item['avg_change']:.4f}</td>
+                <td>{item['max_change']:.4f}</td>
+                <td>{item['median_change']:.4f}</td>
+                <td>{item['min_change']:.4f}</td>
+                <td>{item['positive_closes']}</td>
+                <td>{item['positive_months_perc']:.4f}</td>
+                <td>{item['years']}</td>
+            </tr>
+            """
+    html += """
+        </table>
+    </div>
+    <script>
+        // Show table if data exists
+        const table = document.getElementById('seasonalityTable');
+        if (table.rows.length > 1) {
+            table.style.display = 'table';
+        }
+    </script>
     """
     return render_template_string(html)
 
