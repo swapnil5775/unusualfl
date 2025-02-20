@@ -15,15 +15,15 @@ INST_LIST_API_URL = "https://api.unusualwhales.com/api/institutions"
 INST_HOLDINGS_API_URL = "https://api.unusualwhales.com/api/institution/{name}/holdings"
 MARKET_TIDE_API_URL = "https://api.unusualwhales.com/api/v1/market-tide"
 
-# Database connection with error handling
+# Database connection for Neon Postgres
 def get_db_connection():
     try:
         conn = psycopg2.connect(os.environ["POSTGRES_URL"], cursor_factory=RealDictCursor)
         return conn
     except KeyError:
-        raise Exception("POSTGRES_URL environment variable not set")
+        raise Exception("POSTGRES_URL environment variable not set. Please configure it in Vercel with your Neon connection string for 'option_flow_past_15'.")
     except psycopg2.Error as e:
-        raise Exception(f"Database connection failed: {str(e)}")
+        raise Exception(f"Database connection failed for 'option_flow_past_15': {str(e)}")
 
 # Initialize database table
 def init_db():
@@ -49,7 +49,7 @@ def init_db():
         cur.close()
         conn.close()
     except Exception as e:
-        print(f"Failed to initialize database: {str(e)}")
+        print(f"Failed to initialize database 'option_flow_past_15': {str(e)}")
 
 init_db()  # Run on startup
 
@@ -183,7 +183,7 @@ def option_flow():
         cur.close()
         conn.close()
     except Exception as e:
-        return f"Error accessing database: {str(e)}", 500
+        return f"Error accessing database 'option_flow_past_15': {str(e)}", 500
 
     html = f"""
     <h1>Option Flow Alerts</h1>
@@ -333,7 +333,7 @@ def collect_past_data():
         cur.close()
         conn.close()
     except Exception as e:
-        return jsonify({"error": f"Failed to collect data: {str(e)}"}), 500
+        return jsonify({"error": f"Failed to collect data into 'option_flow_past_15': {str(e)}"}), 500
 
     return jsonify({"trades": len(all_trades), "message": f"Collected and stored {len(all_trades)} trades"})
 
