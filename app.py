@@ -159,11 +159,11 @@ def research():
         """
         return render_template_string(html)
 
-    institutions = inst_data.get("data", [])[:5]  # Limit to 5 for demo
+    institutions = inst_data.get("data", [])[:10]
+    inst_names = [inst if isinstance(inst, str) else inst.get('name', 'N/A') for inst in institutions]
     holdings_master = {}
 
-    for inst in institutions:
-        name = inst if isinstance(inst, str) else inst.get('name', 'N/A')
+    for name in inst_names:
         holdings_data = get_api_data(INST_HOLDINGS_API_URL.format(name=name))
         if "error" not in holdings_data:
             holdings = holdings_data.get("data", [])
@@ -175,14 +175,20 @@ def research():
                         holdings_master[ticker] = {}
                     holdings_master[ticker][name] = units
 
-    table_html = """
-    <table border='1' id="masterTable">
-        <tr><th>Ticker</th><th>Total Units</th></tr>
-    """
+    table_html = "<table border='1' id='masterTable'><tr><th>Ticker</th><th>Total Units</th>"
+    for name in inst_names:
+        table_html += f"<th>{name}</th>"
+    table_html += "</tr>"
+
     ticker_options = ""
     for ticker, inst_holdings in holdings_master.items():
         total_units = sum(inst_holdings.values())
-        table_html += f"<tr><td>{ticker}</td><td>{total_units}</td></tr>"
+        table_html += f"<tr><td>{ticker}</td><td>{total_units}</td>"
+        for name in inst_names:
+            units = inst_holdings.get(name, 0)
+            percentage = (units / total_units * 100) if total_units > 0 else 0
+            table_html += f"<td>{percentage:.1f}%</td>"
+        table_html += "</tr>"
         ticker_options += f"<option value='{ticker}'>{ticker}</option>"
     table_html += "</table>"
 
@@ -192,7 +198,7 @@ def research():
         <option value="">Select a Ticker</option>
         {ticker_options}
     </select>
-    <canvas id="holdingsChart" width="400" height="200"></canvas>
+    <canvas id="holdingsChart" width="600" height="150"></canvas>
     <script>
         const holdingsData = {json.dumps(holdings_master)};
         let chart;
@@ -222,7 +228,12 @@ def research():
                 options: {{
                     scales: {{
                         y: {{ beginAtZero: true }}
-                    }}
+                    }},
+                    plugins: {{
+                        legend: {{ display: false }}
+                    }},
+                    barPercentage: 0.8,
+                    categoryPercentage: 0.9
                 }}
             }});
         }}
@@ -242,18 +253,16 @@ def research():
 # Market Tide Page
 @app.route('/market-tide', methods=['GET'])
 def market_tide():
-    ticker = request.args.get('ticker', 'SPY')  # Default ticker
-    date_from = request.args.get('date_from', '2022-09-28')  # Earliest data
-    date_to = request.args.get('date_to', datetime.utcnow().strftime('%Y-%m-%d'))
+    ticker = request.args.get('ticker', 'SPY')
+    date = request.args.get('date', datetime.utcnow().strftime('%Y-%m-%d'))
 
-    params = {"ticker": ticker, "date_from": date_from, "date_to": date_to}
+    params = {"ticker": ticker, "date": date}
     data = get_api_data(MARKET_TIDE_API_URL, params=params)
 
     form_html = f"""
     <form method="GET" style="margin-top: 10px;">
         <label>Ticker: </label><input type="text" name="ticker" value="{ticker}" placeholder="Enter ticker symbol">
-        <label>From: </label><input type="date" name="date_from" value="{date_from}" min="2022-09-28" max="{datetime.utcnow().strftime('%Y-%m-%d')}">
-        <label>To: </label><input type="date" name="date_to" value="{date_to}" min="2022-09-28" max="{datetime.utcnow().strftime('%Y-%m-%d')}">
+        <label>Date: </label><input type="date" name="date" value="{date}" min="2022-09-28" max="{datetime.utcnow().strftime('%Y-%m-%d')}">
         <button type="submit">Go</button>
     </form>
     """
@@ -266,19 +275,19 @@ def market_tide():
         <p>{data['error']}</p>
         """
     else:
-        tide_data = data.get("data", [])
+        tide_data = data.get("data", {})
         if not tide_data:
             html = f"""
             <h1>Market Tide</h1>
             {MENU_BAR}
             {form_html}
-            <p>No data found for {ticker} between {date_from} and {date_to}.</p>
+            <p>No data found for {ticker} on {date}.</p>
             """
         else:
-            # Assuming data format: {"data": [{"date": "YYYY-MM-DD", "value": float}, ...]}
-            dates = [entry.get("date", "N/A") for entry in tide_data]
-            values = [float(entry.get("value", 0) or 0) for entry in tide_data]
-            chart_data = json.dumps({"dates": dates, "values": values})
+            # Assuming data is a dict of key-value pairs for the day
+            labels = list(tide_data.keys())
+            values = [float(tide_data.get(key, 0) or 0) for key in labels]
+            chart_data = json.dumps({"labels": labels, "values": values})
 
             chart_html = f"""
             <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -287,19 +296,20 @@ def market_tide():
                 const tideData = {chart_data};
                 const ctx = document.getElementById('tideChart').getContext('2d');
                 new Chart(ctx, {{
-                    type: 'line',
+                    type: 'bar',
                     data: {{
-                        labels: tideData.dates,
+                        labels: tideData.labels,
                         datasets: [{{
-                            label: 'Market Tide Value',
+                            label: 'Market Tide Metrics ({ticker} on {date})',
                             data: tideData.values,
+                            backgroundColor: 'rgba(75, 192, 192, 0.2)',
                             borderColor: 'rgba(75, 192, 192, 1)',
-                            fill: false
+                            borderWidth: 1
                         }}]
                     }},
                     options: {{
                         scales: {{
-                            x: {{ title: {{ display: true, text: 'Date' }} }},
+                            x: {{ title: {{ display: true, text: 'Metric' }} }},
                             y: {{ title: {{ display: true, text: 'Value' }}, beginAtZero: true }}
                         }}
                     }}
