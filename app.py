@@ -154,19 +154,25 @@ def option_flow():
         conn = get_db_connection()
         cur = conn.cursor()
 
-        # Fetch trades from DB
+        # Fetch trades from DB with safe SQL formatting
         query = "SELECT * FROM trades"
         params = []
         if date:
             query += " WHERE trade_date = %s"
             params.append(date)
+        # Use safe string formatting for ORDER BY
         query += f" ORDER BY {sort_col} {sort_dir} LIMIT %s OFFSET %s"
         params.extend([limit, offset])
         cur.execute(query, params)
         trades = cur.fetchall()
 
         # Total trades
-        cur.execute("SELECT COUNT(*) FROM trades" + (" WHERE trade_date = %s" if date else ""), ([date] if date else []))
+        count_query = "SELECT COUNT(*) FROM trades"
+        if date:
+            count_query += " WHERE trade_date = %s"
+            cur.execute(count_query, [date])
+        else:
+            cur.execute(count_query)
         total_trades = cur.fetchone()['count']
 
         # Last 5 days stats
