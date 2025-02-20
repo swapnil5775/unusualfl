@@ -227,29 +227,45 @@ def seasonality():
 @app.route('/seasonality/per-ticker', methods=['GET'])
 def seasonality_per_ticker():
     ticker = request.args.get('ticker', '').upper()  # Default to empty, convert to uppercase
-    data = None
-    error = None
+    monthly_data = None
+    yearly_monthly_data = None
+    monthly_error = None
+    yearly_monthly_error = None
 
     if ticker:
-        url = SEASONALITY_API_URL.format(ticker=ticker)
-        response = get_api_data(url)
-        if "error" in response:
-            error = response["error"]
+        # Fetch monthly seasonality data
+        monthly_url = SEASONALITY_API_URL.format(ticker=ticker)
+        monthly_response = get_api_data(monthly_url)
+        if "error" in monthly_response:
+            monthly_error = monthly_response["error"]
         else:
-            data = response.get("data", [])
+            monthly_data = monthly_response.get("data", [])
+
+        # Fetch year-month seasonality data
+        yearly_monthly_url = f"https://api.unusualwhales.com/api/seasonality/{ticker}/year-month"
+        yearly_monthly_response = get_api_data(yearly_monthly_url)
+        if "error" in yearly_monthly_response:
+            yearly_monthly_error = yearly_monthly_response["error"]
+        else:
+            yearly_monthly_data = yearly_monthly_response.get("data", [])
 
     html = f"""
     <h1>Seasonality - Per Ticker</h1>
     {MENU_BAR}
     <div>
         <form method="GET">
-            <label>Enter Ticker (e.g., AAPL, TSLA): </label>
+            <label>Enter Ticker (e.g., AAPL, TSLA, PLTR): </label>
             <input type="text" name="ticker" value="{ticker}" placeholder="Enter ticker symbol">
             <button type="submit">GO</button>
         </form>
-        {'<p style="color: red;">Error: ' + error + '</p>' if error else ''}
-        {'<p>No data available for ticker ' + ticker + '</p>' if not error and not data else ''}
-        <table border='1' {'style="display: none;"' if not data else ''} id="seasonalityTable">
+        {'<p style="color: red;">Error (Monthly Data): ' + monthly_error + '</p>' if monthly_error else ''}
+        {'<p style="color: red;">Error (Year-Month Data): ' + yearly_monthly_error + '</p>' if yearly_monthly_error else ''}
+        {'<p>No monthly data available for ticker ' + ticker + '</p>' if not monthly_error and not monthly_data else ''}
+        {'<p>No year-month data available for ticker ' + ticker + '</p>' if not yearly_monthly_error and not yearly_monthly_data else ''}
+
+        <!-- First Table: Monthly Seasonality Statistics -->
+        <h2>Monthly Seasonality Statistics</h2>
+        <table border='1' {'style="display: none;"' if not monthly_data else ''} id="monthlySeasonalityTable">
             <tr>
                 <th>Month</th>
                 <th>Avg Change</th>
@@ -261,8 +277,8 @@ def seasonality_per_ticker():
                 <th>Years</th>
             </tr>
     """
-    if data:
-        for item in data:
+    if monthly_data:
+        for item in monthly_data:
             # Format numerical values with 2 decimal places and red color for negatives
             avg_change = item['avg_change']
             max_change = item['max_change']
@@ -289,12 +305,51 @@ def seasonality_per_ticker():
             """
     html += """
         </table>
+
+        <!-- Second Table: 15-Year Monthly Return Details -->
+        <h2>15-Year Monthly Return History</h2>
+        <table border='1' {'style="display: none;"' if not yearly_monthly_data else ''} id="yearlyMonthlySeasonalityTable">
+            <tr>
+                <th>Year</th>
+                <th>Month</th>
+                <th>Open</th>
+                <th>Close</th>
+                <th>Change</th>
+            </tr>
+    """
+    if yearly_monthly_data:
+        for item in yearly_monthly_data:
+            # Convert change to float for comparison and formatting
+            change = float(item['change']) if item['change'] else 0.0
+            open_price = float(item['open']) if item['open'] else 0.0
+            close_price = float(item['close']) if item['close'] else 0.0
+
+            # Format for display with red color for negative change values
+            def format_change_with_color(value, decimals=4):
+                color = 'red' if value < 0 else 'black'
+                return f'<span style="color: {color}">{value:.{decimals}f}</span>'
+
+            html += f"""
+            <tr>
+                <td>{item['year']}</td>
+                <td>{item['month']}</td>
+                <td>{open_price:.2f}</td>
+                <td>{close_price:.2f}</td>
+                <td>{format_change_with_color(change)}</td>
+            </tr>
+            """
+    html += """
+        </table>
     </div>
     <script>
-        // Show table if data exists
-        const table = document.getElementById('seasonalityTable');
-        if (table.rows.length > 1) {
-            table.style.display = 'table';
+        // Show tables if data exists
+        const monthlyTable = document.getElementById('monthlySeasonalityTable');
+        if (monthlyTable.rows.length > 1) {
+            monthlyTable.style.display = 'table';
+        }
+        const yearlyMonthlyTable = document.getElementById('yearlyMonthlySeasonalityTable');
+        if (yearlyMonthlyTable.rows.length > 1) {
+            yearlyMonthlyTable.style.display = 'table';
         }
     </script>
     """
