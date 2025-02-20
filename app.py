@@ -252,10 +252,10 @@ def seasonality_per_ticker():
         <table border='1' {'style="display: none;"' if not data else ''} id="seasonalityTable">
             <tr>
                 <th>Month</th>
-                <th>Avg Change (%)</th>
-                <th>Max Change (%)</th>
-                <th>Median Change (%)</th>
-                <th>Min Change (%)</th>
+                <th>Avg Change</th>
+                <th>Max Change</th>
+                <th>Median Change</th>
+                <th>Min Change</th>
                 <th>Positive Closes</th>
                 <th>Positive Months %</th>
                 <th>Years</th>
@@ -263,17 +263,17 @@ def seasonality_per_ticker():
     """
     if data:
         for item in data:
-            # Convert changes to percentages and handle negative numbers with red color
-            avg_change = item['avg_change'] * 100
-            max_change = item['max_change'] * 100
-            median_change = item['median_change'] * 100
-            min_change = item['min_change'] * 100
-            positive_months_perc = item['positive_months_perc'] * 100  # Already a percentage, but ensure format
+            # Format numerical values with 2 decimal places and red color for negatives
+            avg_change = item['avg_change']
+            max_change = item['max_change']
+            median_change = item['median_change']
+            min_change = item['min_change']
+            positive_months_perc = item['positive_months_perc'] * 100  # Keep as percentage for this column
 
             # Format for display with red color for negative values
             def format_with_color(value, decimals=2):
                 color = 'red' if value < 0 else 'black'
-                return f'<span style="color: {color}">{value:.{decimals}f}%</span>'
+                return f'<span style="color: {color}">{value:.{decimals}f}</span>'
 
             html += f"""
             <tr>
