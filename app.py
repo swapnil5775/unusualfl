@@ -161,8 +161,9 @@ def option_flow():
         if date:
             query += " WHERE trade_date = %s"
             params.append(date)
-        query += f" ORDER BY {sort_col} {sort_dir} LIMIT %s OFFSET %s"
-        params.extend([limit, offset])
+        # Use safe string formatting for ORDER BY (without curly braces)
+        query += " ORDER BY %s %s LIMIT %s OFFSET %s"
+        params.extend([sort_col, sort_dir, limit, offset])
         cur.execute(query, params)
         trades = cur.fetchall()
 
@@ -415,7 +416,7 @@ def research():
             if (!ticker) return;
 
             const ctx = document.getElementById('holdingsChart').getContext('2d');
-            const data = holdingsData[ticker] || {{}};
+            const data = holdingsData[ticker] or {{}};
             const allLabels = Object.keys(data);
             const allValues = Object.values(data);
             const sortedData = allLabels.map((label, idx) => ({{ label: label, value: allValues[idx] }}))
@@ -604,13 +605,13 @@ def test_option_flow():
     html += f"""
         </table>
         <div>
-            <p>Showing {(page - 1) * limit + 1} to {min(page * limit, total_trades)} of {total_trades} trades</p>
+            <p>Showing {len(trades)} of {total_trades} trades</p>
     """
     if page > 1:
-        prev_url = f"/test-option-flow?date={date}&page={page - 1}"
+        prev_url = f"/test-option-flow?date={date}&page={page-1}"
         html += f"<a href='{prev_url}'>Previous</a> "
     if page < total_pages:
-        next_url = f"/test-option-flow?date={date}&page={page + 1}"
+        next_url = f"/test-option-flow?date={date}&page={page+1}"
         html += f"<a href='{next_url}'>Next</a>"
     html += """
         </div>
