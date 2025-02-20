@@ -10,7 +10,7 @@ APIKEY = "bd0cf36c-5072-4b1e-87ee-7e278b8a02e5"
 FLOW_API_URL = "https://api.unusualwhales.com/api/option-trades/flow-alerts"
 INST_LIST_API_URL = "https://api.unusualwhales.com/api/institutions"
 INST_HOLDINGS_API_URL = "https://api.unusualwhales.com/api/institution/{name}/holdings"
-MARKET_TIDE_API_URL = "https://api.unusualwhales.com/api/market-tide"
+MARKET_TIDE_API_URL = "https://api.unusualwhales.com/api/v1/market-tide"  # Trying /v1/market-tide again
 
 def get_api_data(url, params=None):
     headers = {"Authorization": f"Bearer {APIKEY}"}
@@ -19,7 +19,7 @@ def get_api_data(url, params=None):
         response.raise_for_status()
         return response.json()
     except (requests.RequestException, json.JSONDecodeError) as e:
-        return {"error": str(e)}
+        return {"error": f"{str(e)} - URL: {response.url if 'response' in locals() else url}"}
 
 # Menu bar template
 MENU_BAR = """
@@ -46,7 +46,6 @@ def home():
 @app.route('/optionflow', methods=['GET'])
 def option_flow():
     try:
-        # Get query parameters
         days = int(request.args.get('days', 1))
         if days not in [1, 2, 3, 7]:
             days = 1
@@ -64,16 +63,12 @@ def option_flow():
             html = f"<h1>Option Flow Alerts</h1>{MENU_BAR}<p>{data['error']}</p>"
         else:
             trades = data.get("data", [])
-            total_trades = len(trades)  # This is per page; API might not return total count
+            total_trades = len(trades)
 
-            # Filter by ticker if provided
             if ticker:
                 trades = [trade for trade in trades if trade.get("ticker", "").lower() == ticker.lower()]
-
-            # Filter by time
             filtered_trades = [trade for trade in trades if trade.get("start_time", 0) >= cutoff_time]
 
-            # Navigation and filter form
             button_html = f"""
             <form method="GET" style="margin-top: 10px; text-align: center;">
                 <button type="submit" name="days" value="1">1D</button>
@@ -89,11 +84,10 @@ def option_flow():
                 <button type="submit">Filter</button>
                 <input type="hidden" name="days" value="{days}">
                 <input type="hidden" name="limit" value="{limit}">
-                <input type="hidden" name="offset" value="0"> <!-- Reset offset on filter -->
+                <input type="hidden" name="offset" value="0">
             </form>
             """
 
-            # Pagination button (Next Page)
             next_offset = offset + limit
             pagination_html = f"""
             <div style="text-align: center; margin-top: 10px;">
@@ -103,7 +97,6 @@ def option_flow():
             </div>
             """
 
-            # Results limit dropdown
             limit_html = f"""
             <form method="GET" style="margin-top: 10px; text-align: center;">
                 <label>Results per page: </label>
@@ -113,7 +106,7 @@ def option_flow():
                 </select>
                 <input type="hidden" name="days" value="{days}">
                 <input type="hidden" name="ticker" value="{ticker}">
-                <input type="hidden" name="offset" value="0"> <!-- Reset offset on limit change -->
+                <input type="hidden" name="offset" value="0">
             </form>
             """
 
