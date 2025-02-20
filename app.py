@@ -11,8 +11,8 @@ FLOW_API_URL = "https://api.unusualwhales.com/api/option-trades/flow-alerts"
 INST_LIST_API_URL = "https://api.unusualwhales.com/api/institutions"
 INST_HOLDINGS_API_URL = "https://api.unusualwhales.com/api/institution/{name}/holdings"
 MARKET_TIDE_API_URL = "https://api.unusualwhales.com/api/v1/market-tide"
-SEASON_PERF_MONTHLY_API_URL = "https://api.unusualwhales.com/api/seasonality/{month}/performers"
-SEASON_STOCK_PERF_API_URL = "https://api.unusualwhales.com/api/seasonality/{ticker}/monthly"
+SEASON_PERF_MONTHLY_API_URL = "https://api.unusualwhales.com/api/seasonality/performers/{month}"
+SEASON_STOCK_PERF_API_URL = "https://api.unusualwhales.com/api/seasonality/monthly/{ticker}"
 SEASON_MARKET_API_URL = "https://api.unusualwhales.com/api/seasonality/market"
 
 def get_api_data(url, params=None):
@@ -22,7 +22,7 @@ def get_api_data(url, params=None):
         response.raise_for_status()
         return response.json()
     except (requests.RequestException, json.JSONDecodeError) as e:
-        return {"error": f"{str(e)} - URL: {response.url if 'response' in locals() else url}"}
+        return {"error": f"{str(e)} - URL: {response.url if 'response' in locals() else url}", "raw": response.text if 'response' in locals() else ""}
 
 # Menu bar template
 MENU_BAR = """
@@ -402,7 +402,7 @@ def seasonality_home():
 # Perf-Monthly Sub-Page
 @app.route('/seasonality/perf-monthly', methods=['GET'])
 def perf_monthly():
-    month = request.args.get('month', 'january')  # Default to January
+    month = request.args.get('month', 'january')
     months = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december']
     data = get_api_data(SEASON_PERF_MONTHLY_API_URL.format(month=month.lower()))
 
@@ -430,6 +430,7 @@ def perf_monthly():
         {sub_menu}
         {form_html}
         <p>{data['error']}</p>
+        <pre>Raw Response: {data.get('raw', 'N/A')}</pre>
         """
     else:
         performers = data.get("data", [])
@@ -442,16 +443,16 @@ def perf_monthly():
             <p>No performers found for {month.capitalize()}.</p>
             """
         else:
-            # Assuming performers return ticker and performance metrics
             table_html = """
             <table border='1'>
-                <tr><th>Ticker</th><th>Performance</th></tr>
+                <tr><th>Ticker</th><th>Average Return</th><th>Win Rate</th></tr>
             """
             for perf in performers:
                 table_html += f"""
                 <tr>
                     <td>{perf.get('ticker', 'N/A')}</td>
-                    <td>{perf.get('performance', 'N/A')}</td>
+                    <td>{perf.get('average_return', 'N/A')}</td>
+                    <td>{perf.get('win_rate', 'N/A')}</td>
                 </tr>
                 """
             table_html += "</table>"
@@ -492,6 +493,7 @@ def stock_perf_monthly():
         {sub_menu}
         {form_html}
         <p>{data['error']}</p>
+        <pre>Raw Response: {data.get('raw', 'N/A')}</pre>
         """
     else:
         monthly_data = data.get("data", [])
@@ -504,24 +506,23 @@ def stock_perf_monthly():
             <p>No monthly performance data found for {ticker}.</p>
             """
         else:
-            # Assuming monthly data returns month and performance
             table_html = """
             <table border='1'>
-                <tr><th>Month</th><th>Performance</th></tr>
+                <tr><th>Month</th><th>Average Return</th><th>Win Rate</th></tr>
             """
             for entry in monthly_data:
                 table_html += f"""
                 <tr>
                     <td>{entry.get('month', 'N/A')}</td>
-                    <td>{entry.get('performance', 'N/A')}</td>
+                    <td>{entry.get('average_return', 'N/A')}</td>
+                    <td>{entry.get('win_rate', 'N/A')}</td>
                 </tr>
                 """
             table_html += "</table>"
 
-            # Chart for performance over months
             chart_data = json.dumps({
                 "months": [entry.get("month", "N/A") for entry in monthly_data],
-                "values": [float(entry.get("performance", 0) or 0) for entry in monthly_data]
+                "returns": [float(entry.get("average_return", 0) or 0) for entry in monthly_data]
             })
             chart_html = f"""
             <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -534,8 +535,8 @@ def stock_perf_monthly():
                     data: {{
                         labels: perfData.months,
                         datasets: [{{
-                            label: 'Performance ({ticker})',
-                            data: perfData.values,
+                            label: 'Average Return ({ticker})',
+                            data: perfData.returns,
                             borderColor: 'rgba(75, 192, 192, 1)',
                             fill: false
                         }}]
@@ -543,7 +544,7 @@ def stock_perf_monthly():
                     options: {{
                         scales: {{
                             x: {{ title: {{ display: true, text: 'Month' }} }},
-                            y: {{ title: {{ display: true, text: 'Performance' }}, beginAtZero: true }}
+                            y: {{ title: {{ display: true, text: 'Average Return' }}, beginAtZero: true }}
                         }}
                     }}
                 }});
@@ -579,6 +580,7 @@ def seasonality_monthly():
         {MENU_BAR}
         {sub_menu}
         <p>{data['error']}</p>
+        <pre>Raw Response: {data.get('raw', 'N/A')}</pre>
         """
     else:
         monthly_data = data.get("data", [])
@@ -590,23 +592,23 @@ def seasonality_monthly():
             <p>No market seasonality data found.</p>
             """
         else:
-            # Assuming market seasonality returns month and some metric (e.g., avg return)
             table_html = """
             <table border='1'>
-                <tr><th>Month</th><th>Avg Return</th></tr>
+                <tr><th>Month</th><th>Average Return</th><th>Win Rate</th></tr>
             """
             for entry in monthly_data:
                 table_html += f"""
                 <tr>
                     <td>{entry.get('month', 'N/A')}</td>
-                    <td>{entry.get('avg_return', 'N/A')}</td>
+                    <td>{entry.get('average_return', 'N/A')}</td>
+                    <td>{entry.get('win_rate', 'N/A')}</td>
                 </tr>
                 """
             table_html += "</table>"
 
             chart_data = json.dumps({
                 "months": [entry.get("month", "N/A") for entry in monthly_data],
-                "values": [float(entry.get("avg_return", 0) or 0) for entry in monthly_data]
+                "returns": [float(entry.get("average_return", 0) or 0) for entry in monthly_data]
             })
             chart_html = f"""
             <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -620,7 +622,7 @@ def seasonality_monthly():
                         labels: seasonData.months,
                         datasets: [{{
                             label: 'Average Market Return',
-                            data: seasonData.values,
+                            data: seasonData.returns,
                             backgroundColor: 'rgba(75, 192, 192, 0.2)',
                             borderColor: 'rgba(75, 192, 192, 1)',
                             borderWidth: 1
@@ -629,7 +631,7 @@ def seasonality_monthly():
                     options: {{
                         scales: {{
                             x: {{ title: {{ display: true, text: 'Month' }} }},
-                            y: {{ title: {{ display: true, text: 'Avg Return' }}, beginAtZero: true }}
+                            y: {{ title: {{ display: true, text: 'Average Return' }}, beginAtZero: true }}
                         }}
                     }}
                 }});
