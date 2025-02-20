@@ -10,7 +10,10 @@ APIKEY = "bd0cf36c-5072-4b1e-87ee-7e278b8a02e5"
 FLOW_API_URL = "https://api.unusualwhales.com/api/option-trades/flow-alerts"
 INST_LIST_API_URL = "https://api.unusualwhales.com/api/institutions"
 INST_HOLDINGS_API_URL = "https://api.unusualwhales.com/api/institution/{name}/holdings"
-MARKET_TIDE_API_URL = "https://api.unusualwhales.com/api/v1/market-tide"  # Trying /v1/market-tide again
+MARKET_TIDE_API_URL = "https://api.unusualwhales.com/api/v1/market-tide"
+SEASON_PERF_MONTHLY_API_URL = "https://api.unusualwhales.com/api/seasonality/{month}/performers"
+SEASON_STOCK_PERF_API_URL = "https://api.unusualwhales.com/api/seasonality/{ticker}/monthly"
+SEASON_MARKET_API_URL = "https://api.unusualwhales.com/api/seasonality/market"
 
 def get_api_data(url, params=None):
     headers = {"Authorization": f"Bearer {APIKEY}"}
@@ -29,6 +32,7 @@ MENU_BAR = """
     <a href="/institution/list" style="margin-right: 20px;">Institution List</a>
     <a href="/research" style="margin-right: 20px;">Research</a>
     <a href="/market-tide" style="margin-right: 20px;">Market Tide</a>
+    <a href="/seasonality" style="margin-right: 20px;">Seasonality</a>
 </div>
 """
 
@@ -373,6 +377,270 @@ def market_tide():
             <h1>Market Tide ({ticker})</h1>
             {MENU_BAR}
             {form_html}
+            {chart_html}
+            """
+    return render_template_string(html)
+
+# Seasonality Main Page
+@app.route('/seasonality')
+def seasonality_home():
+    sub_menu = """
+    <div style="margin-top: 10px;">
+        <a href="/seasonality/perf-monthly" style="margin-right: 20px;">Perf-Monthly</a>
+        <a href="/seasonality/stock-perf-monthly" style="margin-right: 20px;">Stock Perf Monthly</a>
+        <a href="/seasonality/seasonality-monthly" style="margin-right: 20px;">Seasonality Monthly</a>
+    </div>
+    """
+    html = f"""
+    <h1>Seasonality</h1>
+    {MENU_BAR}
+    {sub_menu}
+    <p>Select a sub-page to view seasonality data.</p>
+    """
+    return render_template_string(html)
+
+# Perf-Monthly Sub-Page
+@app.route('/seasonality/perf-monthly', methods=['GET'])
+def perf_monthly():
+    month = request.args.get('month', 'january')  # Default to January
+    months = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december']
+    data = get_api_data(SEASON_PERF_MONTHLY_API_URL.format(month=month.lower()))
+
+    sub_menu = """
+    <div style="margin-top: 10px;">
+        <a href="/seasonality" style="margin-right: 20px;">Seasonality Home</a>
+        <a href="/seasonality/stock-perf-monthly" style="margin-right: 20px;">Stock Perf Monthly</a>
+        <a href="/seasonality/seasonality-monthly" style="margin-right: 20px;">Seasonality Monthly</a>
+    </div>
+    """
+
+    form_html = f"""
+    <form method="GET" style="margin-top: 10px;">
+        <label>Month: </label>
+        <select name="month" onchange="this.form.submit()">
+            {''.join(f'<option value="{m}" {"selected" if m == month.lower() else ""}>{m.capitalize()}</option>' for m in months)}
+        </select>
+    </form>
+    """
+
+    if "error" in data:
+        html = f"""
+        <h1>Perf-Monthly</h1>
+        {MENU_BAR}
+        {sub_menu}
+        {form_html}
+        <p>{data['error']}</p>
+        """
+    else:
+        performers = data.get("data", [])
+        if not performers:
+            html = f"""
+            <h1>Perf-Monthly</h1>
+            {MENU_BAR}
+            {sub_menu}
+            {form_html}
+            <p>No performers found for {month.capitalize()}.</p>
+            """
+        else:
+            # Assuming performers return ticker and performance metrics
+            table_html = """
+            <table border='1'>
+                <tr><th>Ticker</th><th>Performance</th></tr>
+            """
+            for perf in performers:
+                table_html += f"""
+                <tr>
+                    <td>{perf.get('ticker', 'N/A')}</td>
+                    <td>{perf.get('performance', 'N/A')}</td>
+                </tr>
+                """
+            table_html += "</table>"
+            html = f"""
+            <h1>Perf-Monthly ({month.capitalize()})</h1>
+            {MENU_BAR}
+            {sub_menu}
+            {form_html}
+            {table_html}
+            """
+    return render_template_string(html)
+
+# Stock Perf Monthly Sub-Page
+@app.route('/seasonality/stock-perf-monthly', methods=['GET'])
+def stock_perf_monthly():
+    ticker = request.args.get('ticker', 'SPY')
+    data = get_api_data(SEASON_STOCK_PERF_API_URL.format(ticker=ticker.upper()))
+
+    sub_menu = """
+    <div style="margin-top: 10px;">
+        <a href="/seasonality" style="margin-right: 20px;">Seasonality Home</a>
+        <a href="/seasonality/perf-monthly" style="margin-right: 20px;">Perf-Monthly</a>
+        <a href="/seasonality/seasonality-monthly" style="margin-right: 20px;">Seasonality Monthly</a>
+    </div>
+    """
+
+    form_html = f"""
+    <form method="GET" style="margin-top: 10px;">
+        <label>Ticker: </label><input type="text" name="ticker" value="{ticker}" placeholder="Enter ticker symbol">
+        <button type="submit">Go</button>
+    </form>
+    """
+
+    if "error" in data:
+        html = f"""
+        <h1>Stock Perf Monthly</h1>
+        {MENU_BAR}
+        {sub_menu}
+        {form_html}
+        <p>{data['error']}</p>
+        """
+    else:
+        monthly_data = data.get("data", [])
+        if not monthly_data:
+            html = f"""
+            <h1>Stock Perf Monthly</h1>
+            {MENU_BAR}
+            {sub_menu}
+            {form_html}
+            <p>No monthly performance data found for {ticker}.</p>
+            """
+        else:
+            # Assuming monthly data returns month and performance
+            table_html = """
+            <table border='1'>
+                <tr><th>Month</th><th>Performance</th></tr>
+            """
+            for entry in monthly_data:
+                table_html += f"""
+                <tr>
+                    <td>{entry.get('month', 'N/A')}</td>
+                    <td>{entry.get('performance', 'N/A')}</td>
+                </tr>
+                """
+            table_html += "</table>"
+
+            # Chart for performance over months
+            chart_data = json.dumps({
+                "months": [entry.get("month", "N/A") for entry in monthly_data],
+                "values": [float(entry.get("performance", 0) or 0) for entry in monthly_data]
+            })
+            chart_html = f"""
+            <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+            <canvas id="perfChart" width="600" height="300"></canvas>
+            <script>
+                const perfData = {chart_data};
+                const ctx = document.getElementById('perfChart').getContext('2d');
+                new Chart(ctx, {{
+                    type: 'line',
+                    data: {{
+                        labels: perfData.months,
+                        datasets: [{{
+                            label: 'Performance ({ticker})',
+                            data: perfData.values,
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            fill: false
+                        }}]
+                    }},
+                    options: {{
+                        scales: {{
+                            x: {{ title: {{ display: true, text: 'Month' }} }},
+                            y: {{ title: {{ display: true, text: 'Performance' }}, beginAtZero: true }}
+                        }}
+                    }}
+                }});
+            </script>
+            """
+
+            html = f"""
+            <h1>Stock Perf Monthly ({ticker})</h1>
+            {MENU_BAR}
+            {sub_menu}
+            {form_html}
+            {table_html}
+            {chart_html}
+            """
+    return render_template_string(html)
+
+# Seasonality Monthly Sub-Page
+@app.route('/seasonality/seasonality-monthly')
+def seasonality_monthly():
+    data = get_api_data(SEASON_MARKET_API_URL)
+
+    sub_menu = """
+    <div style="margin-top: 10px;">
+        <a href="/seasonality" style="margin-right: 20px;">Seasonality Home</a>
+        <a href="/seasonality/perf-monthly" style="margin-right: 20px;">Perf-Monthly</a>
+        <a href="/seasonality/stock-perf-monthly" style="margin-right: 20px;">Stock Perf Monthly</a>
+    </div>
+    """
+
+    if "error" in data:
+        html = f"""
+        <h1>Seasonality Monthly</h1>
+        {MENU_BAR}
+        {sub_menu}
+        <p>{data['error']}</p>
+        """
+    else:
+        monthly_data = data.get("data", [])
+        if not monthly_data:
+            html = f"""
+            <h1>Seasonality Monthly</h1>
+            {MENU_BAR}
+            {sub_menu}
+            <p>No market seasonality data found.</p>
+            """
+        else:
+            # Assuming market seasonality returns month and some metric (e.g., avg return)
+            table_html = """
+            <table border='1'>
+                <tr><th>Month</th><th>Avg Return</th></tr>
+            """
+            for entry in monthly_data:
+                table_html += f"""
+                <tr>
+                    <td>{entry.get('month', 'N/A')}</td>
+                    <td>{entry.get('avg_return', 'N/A')}</td>
+                </tr>
+                """
+            table_html += "</table>"
+
+            chart_data = json.dumps({
+                "months": [entry.get("month", "N/A") for entry in monthly_data],
+                "values": [float(entry.get("avg_return", 0) or 0) for entry in monthly_data]
+            })
+            chart_html = f"""
+            <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+            <canvas id="seasonChart" width="600" height="300"></canvas>
+            <script>
+                const seasonData = {chart_data};
+                const ctx = document.getElementById('seasonChart').getContext('2d');
+                new Chart(ctx, {{
+                    type: 'bar',
+                    data: {{
+                        labels: seasonData.months,
+                        datasets: [{{
+                            label: 'Average Market Return',
+                            data: seasonData.values,
+                            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            borderWidth: 1
+                        }}]
+                    }},
+                    options: {{
+                        scales: {{
+                            x: {{ title: {{ display: true, text: 'Month' }} }},
+                            y: {{ title: {{ display: true, text: 'Avg Return' }}, beginAtZero: true }}
+                        }}
+                    }}
+                }});
+            </script>
+            """
+
+            html = f"""
+            <h1>Seasonality Monthly</h1>
+            {MENU_BAR}
+            {sub_menu}
+            {table_html}
             {chart_html}
             """
     return render_template_string(html)
