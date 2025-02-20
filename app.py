@@ -382,23 +382,27 @@ def seasonality_etf_market():
     data = None
     error = None
 
-    if ticker == 'ALL':
-        response = get_api_data(SEASONALITY_MARKET_API_URL)
-        if "error" in response:
-            error = response["error"]
+    try:
+        if ticker == 'ALL':
+            response = get_api_data(SEASONALITY_MARKET_API_URL)
+            if "error" in response:
+                error = response["error"]
+            else:
+                data = response.get("data", [])
         else:
-            data = response.get("data", [])
-    else:
-        # Fetch data for a specific ticker
-        url = SEASONALITY_API_URL.format(ticker=ticker)
-        response = get_api_data(url)
-        if "error" in response:
-            error = response["error"]
-        else:
-            data = response.get("data", [])
-
-    # List of ETF tickers for buttons
-    etf_tickers = ['SPY', 'QQQ', 'IWM', 'XLE', 'XLC', 'XLK', 'XLV', 'XLP', 'XLY', 'XLRE', 'XLF', 'XLI', 'XLB']
+            # Validate ticker is in the ETF list
+            etf_tickers = ['SPY', 'QQQ', 'IWM', 'XLE', 'XLC', 'XLK', 'XLV', 'XLP', 'XLY', 'XLRE', 'XLF', 'XLI', 'XLB']
+            if ticker not in etf_tickers:
+                error = f"Invalid ticker '{ticker}'. Must be one of {', '.join(etf_tickers)} or 'ALL'."
+            else:
+                url = SEASONALITY_API_URL.format(ticker=ticker)
+                response = get_api_data(url)
+                if "error" in response:
+                    error = response["error"]
+                else:
+                    data = response.get("data", [])
+    except Exception as e:
+        error = f"Server error: {str(e)}"
 
     html = f"""
     <h1>Seasonality - ETF Market</h1>
@@ -432,11 +436,11 @@ def seasonality_etf_market():
     if data:
         for item in data:
             # Format numerical values with 2 decimal places and red color for negatives
-            avg_change = item['avg_change']
-            max_change = item['max_change']
-            median_change = item['median_change']
-            min_change = item['min_change']
-            positive_months_perc = float(item['positive_months_perc']) * 100  # Convert to percentage
+            avg_change = float(item.get('avg_change', 0)) if item.get('avg_change') is not None else 0
+            max_change = float(item.get('max_change', 0)) if item.get('max_change') is not None else 0
+            median_change = float(item.get('median_change', 0)) if item.get('median_change') is not None else 0
+            min_change = float(item.get('min_change', 0)) if item.get('min_change') is not None else 0
+            positive_months_perc = float(item.get('positive_months_perc', 0)) * 100  # Convert to percentage
 
             # Format for display with red color for negative values
             def format_with_color(value, decimals=2):
@@ -445,15 +449,15 @@ def seasonality_etf_market():
 
             html += f"""
             <tr>
-                <td>{item['ticker']}</td>
-                <td>{item['month']}</td>
+                <td>{item.get('ticker', 'N/A')}</td>
+                <td>{item.get('month', 'N/A')}</td>
                 <td>{format_with_color(avg_change)}</td>
                 <td>{format_with_color(max_change)}</td>
                 <td>{format_with_color(median_change)}</td>
                 <td>{format_with_color(min_change)}</td>
-                <td>{item['positive_closes']}</td>
+                <td>{item.get('positive_closes', 'N/A')}</td>
                 <td>{positive_months_perc:.2f}%</td>
-                <td>{item['years']}</td>
+                <td>{item.get('years', 'N/A')}</td>
             </tr>
             """
     html += """
