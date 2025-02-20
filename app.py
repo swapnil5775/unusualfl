@@ -375,7 +375,7 @@ def seasonality_per_ticker():
     </script>
     """
     return render_template_string(html)
-
+    
 @app.route('/seasonality/etf-market', methods=['GET'])
 def seasonality_etf_market():
     ticker = request.args.get('ticker', 'ALL').upper()  # Default to 'ALL', convert to uppercase
@@ -392,13 +392,23 @@ def seasonality_etf_market():
             print(f"Raw API response: {response.get('raw', 'No raw data available')}")
         else:
             all_data = response.get("data", [])
-            # Log the raw data for debugging
+            # Log the raw data for debugging, including full structure
             print(f"API Response Data Length for {SEASONALITY_MARKET_API_URL}: {len(all_data)}")
-            print(f"Sample of API Response: {all_data[:5] if all_data else 'Empty data'}")
-            # Filter data based on the selected ticker (or show all if 'ALL')
-            data = [item for item in all_data if item['ticker'] == ticker] if ticker != 'ALL' else all_data
-            # Log filtered data length
-            print(f"Filtered Data Length for ticker '{ticker}': {len(data)}")
+            print(f"Full API Response Sample: {all_data[:5] if all_data else 'Empty data'}")
+            # Ensure all_data contains the expected fields
+            if all_data and not any('ticker' in item and 'month' in item for item in all_data):
+                error = "Unexpected API response: Missing required fields (ticker, month)"
+                print(f"Unexpected API response structure: {all_data[:1] if all_data else 'No data'}")
+            else:
+                # Filter data based on the selected ticker (or show all if 'ALL')
+                data = [item for item in all_data if item['ticker'] == ticker] if ticker != 'ALL' else all_data
+                # Log filtered data length and sample
+                print(f"Filtered Data Length for ticker '{ticker}': {len(data)}")
+                print(f"Filtered Data Sample for ticker '{ticker}': {data[:5] if data else 'Empty filtered data'}")
+                # Verify data structure after filtering
+                if data and not any('ticker' in item for item in data):
+                    error = f"Filtered data for ticker '{ticker}' missing 'ticker' field"
+                    print(f"Unexpected filtered data structure: {data[:1] if data else 'No filtered data'}")
     except Exception as e:
         error = f"Unexpected error fetching data: {str(e)}"
         print(f"Unexpected Error in seasonality_etf_market: {str(e)}")
@@ -438,11 +448,16 @@ def seasonality_etf_market():
     if data:
         for item in data:
             # Convert string values to floats for numerical columns
-            avg_change = float(item['avg_change']) if item['avg_change'] else 0.0
-            max_change = float(item['max_change']) if item['max_change'] else 0.0
-            median_change = float(item['median_change']) if item['median_change'] else 0.0
-            min_change = float(item['min_change']) if item['min_change'] else 0.0
-            positive_months_perc = float(item['positive_months_perc']) * 100  # Convert to percentage
+            try:
+                avg_change = float(item['avg_change']) if item['avg_change'] else 0.0
+                max_change = float(item['max_change']) if item['max_change'] else 0.0
+                median_change = float(item['median_change']) if item['median_change'] else 0.0
+                min_change = float(item['min_change']) if item['min_change'] else 0.0
+                positive_months_perc = float(item['positive_months_perc']) * 100  # Convert to percentage
+            except (ValueError, TypeError) as e:
+                error = f"Error parsing numerical data for item {item}: {str(e)}"
+                print(f"Error parsing data for item {item}: {str(e)}")
+                continue  # Skip this item and continue with the next
 
             # Format for display with red color for negative values
             def format_with_color(value, decimals=2):
