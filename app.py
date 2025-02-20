@@ -386,6 +386,8 @@ def seasonality_etf_market():
     response = get_api_data(SEASONALITY_MARKET_API_URL)
     if "error" in response:
         error = response["error"]
+        # Log the error for debugging (optional, for local development)
+        print(f"API Error for {SEASONALITY_MARKET_API_URL}: {error}")
     else:
         all_data = response.get("data", [])
         # Filter data based on the selected ticker (or show all if 'ALL')
@@ -408,7 +410,7 @@ def seasonality_etf_market():
         """
     html += """
         </div>
-        {'<p style="color: red;">Error: ' + error + '</p>' if error else ''}
+        {'<p style="color: red;">Error: ' + str(error) if error else ''}</p>
         {'<p>No data available for ticker ' + ticker + '</p>' if not error and not data else ''}
         <table border='1' {'style="display: none;"' if not data else ''} id="etfMarketTable">
             <tr>
