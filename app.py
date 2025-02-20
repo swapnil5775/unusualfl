@@ -1,16 +1,31 @@
-from flask import Flask, render_template_string, request
+from flask import Flask, render_template_string, request, jsonify
 import requests
 import json
 from datetime import datetime, timedelta
+import sqlite3
+from threading import Thread
 
 app = Flask(__name__)
 
-# API configuration (hardcoded for testing)
+# API configuration
 APIKEY = "bd0cf36c-5072-4b1e-87ee-7e278b8a02e5"
 FLOW_API_URL = "https://api.unusualwhales.com/api/option-trades/flow-alerts"
 INST_LIST_API_URL = "https://api.unusualwhales.com/api/institutions"
 INST_HOLDINGS_API_URL = "https://api.unusualwhales.com/api/institution/{name}/holdings"
 MARKET_TIDE_API_URL = "https://api.unusualwhales.com/api/v1/market-tide"
+
+# Database setup
+def init_db():
+    conn = sqlite3.connect('option_flow.db')
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS option_flow
+                 (id INTEGER PRIMARY KEY, ticker TEXT, type TEXT, strike REAL, price REAL,
+                  total_size INTEGER, expiry TEXT, start_time INTEGER, total_premium REAL,
+                  alert_rule TEXT, date TEXT)''')
+    conn.commit()
+    conn.close()
+
+init_db()
 
 def get_api_data(url, params=None):
     headers = {"Authorization": f"Bearer {APIKEY}"}
@@ -21,7 +36,6 @@ def get_api_data(url, params=None):
     except (requests.RequestException, json.JSONDecodeError) as e:
         return {"error": f"{str(e)} - URL: {response.url if 'response' in locals() else url}", "raw": response.text if 'response' in locals() else ""}
 
-# Menu bar template (removed seasonality link)
 MENU_BAR = """
 <div style="background-color: #f8f8f8; padding: 10px;">
     <a href="/" style="margin-right: 20px;">Home</a>
@@ -32,7 +46,6 @@ MENU_BAR = """
 </div>
 """
 
-# Main Page
 @app.route('/')
 def home():
     html = f"""
@@ -42,152 +55,197 @@ def home():
     """
     return render_template_string(html)
 
-# Option Flow Page
-@app.route('/optionflow', methods=['GET'])
-def option_flow():
-    try:
-        days = int(request.args.get('days', 1))
-        if days not in [1, 2, 3, 7]:
-            days = 1
-        ticker = request.args.get('ticker', '').strip()
-        limit = int(request.args.get('limit', 100))
-        if limit not in [100, 500]:
-            limit = 100
-        offset = int(request.args.get('offset', 0))
-
-        cutoff_time = int((datetime.utcnow() - timedelta(days=days)).timestamp() * 1000)
-        params = {"limit": limit, "offset": offset}
-        data = get_api_data(FLOW_API_URL, params=params)
-
-        if "error" in data:
-            html = f"<h1>Option Flow Alerts</h1>{MENU_BAR}<p>{data['error']}</p>"
-        else:
-            trades = data.get("data", [])
-            total_trades = len(trades)
-
-            if ticker:
-                trades = [trade for trade in trades if trade.get("ticker", "").lower() == ticker.lower()]
-            filtered_trades = [trade for trade in trades if trade.get("start_time", 0) >= cutoff_time]
-
-            button_html = f"""
-            <form method="GET" style="margin-top: 10px; text-align: center;">
-                <button type="submit" name="days" value="1">1D</button>
-                <button type="submit" name="days" value="2">2D</button>
-                <button type="submit" name="days" value="3">3D</button>
-                <button type="submit" name="days" value="7">7D</button>
-                <input type="hidden" name="limit" value="{limit}">
-                <input type="hidden" name="offset" value="{offset}">
-                <input type="hidden" name="ticker" value="{ticker}">
-            </form>
-            <form method="GET" style="margin-top: 10px; text-align: center;">
-                <input type="text" name="ticker" value="{ticker}" placeholder="Filter by Ticker">
-                <button type="submit">Filter</button>
-                <input type="hidden" name="days" value="{days}">
-                <input type="hidden" name="limit" value="{limit}">
-                <input type="hidden" name="offset" value="0">
-            </form>
-            """
-
-            next_offset = offset + limit
-            pagination_html = f"""
-            <div style="text-align: center; margin-top: 10px;">
-                <a href="/optionflow?days={days}&ticker={ticker}&limit={limit}&offset={next_offset}">
-                    <button>Next Page</button>
-                </a>
-            </div>
-            """
-
-            limit_html = f"""
-            <form method="GET" style="margin-top: 10px; text-align: center;">
-                <label>Results per page: </label>
-                <select name="limit" onchange="this.form.submit()">
-                    <option value="100" {'selected' if limit == 100 else ''}>100</option>
-                    <option value="500" {'selected' if limit == 500 else ''}>500</option>
-                </select>
-                <input type="hidden" name="days" value="{days}">
-                <input type="hidden" name="ticker" value="{ticker}">
-                <input type="hidden" name="offset" value="0">
-            </form>
-            """
-
-            if filtered_trades:
-                table_html = """
-                <table border='1'>
-                    <tr>
-                        <th>Ticker</th><th>Type</th><th>Strike</th><th>Price</th><th>Total Size</th><th>Expiry</th><th>Start Time</th><th>Total Premium</th><th>Alert Rule</th>
-                    </tr>
-                """
-                for trade in filtered_trades:
-                    start_time = datetime.fromtimestamp(trade.get("start_time", 0) / 1000).strftime('%Y-%m-%d %H:%M:%S')
-                    table_html += f"""
-                    <tr>
-                        <td>{trade.get('ticker', 'N/A')}</td>
-                        <td>{trade.get('type', 'N/A')}</td>
-                        <td>{trade.get('strike', 'N/A')}</td>
-                        <td>{trade.get('price', 'N/A')}</td>
-                        <td>{trade.get('total_size', 'N/A')}</td>
-                        <td>{trade.get('expiry', 'N/A')}</td>
-                        <td>{start_time}</td>
-                        <td>{trade.get('total_premium', 'N/A')}</td>
-                        <td>{trade.get('alert_rule', 'N/A')}</td>
-                    </tr>
-                    """
-                table_html += "</table>"
-                html = f"""
-                <h1>Option Flow Alerts</h1>
-                {MENU_BAR}
-                {pagination_html}
-                {button_html}
-                <p>Showing {len(filtered_trades)} trades (filtered from {total_trades} pulled) in the last {days} day(s):</p>
-                {table_html}
-                {limit_html}
-                """
-            else:
-                html = f"""
-                <h1>Option Flow Alerts</h1>
-                {MENU_BAR}
-                {pagination_html}
-                {button_html}
-                <p>No trades found in the last {days} day(s) with current filters (from {total_trades} pulled).</p>
-                {limit_html}
-                """
-        return render_template_string(html)
-    except Exception as e:
-        return render_template_string(f"<h1>Option Flow Alerts</h1>{MENU_BAR}<p>Internal Server Error: {e}</p>")
-
-# Institution List Page
 @app.route('/institution/list')
 def institution_list():
     data = get_api_data(INST_LIST_API_URL)
-    if "error" in data:
-        html = f"""
-        <h1>Institution List</h1>
-        {MENU_BAR}
-        <p>{data['error']}</p>
-        """
-    else:
+    html = f"""
+    <h1>Institution List</h1>
+    {MENU_BAR}
+    <style>
+        .inst-table {{ transition: all 0.5s ease; }}
+        .holdings-table {{ display: none; transition: all 0.5s ease; }}
+        .show {{ display: block; }}
+        .hide {{ display: none; }}
+    </style>
+    <div id="instContainer">
+        <table border='1' class='inst-table' id='instTable'>
+            <tr><th>Name</th></tr>
+    """
+    
+    if "error" not in data:
         institutions = data.get("data", []) if isinstance(data, dict) else data
-        if institutions:
-            table_html = """
-            <table border='1'>
-                <tr><th>Name</th></tr>
-            """
-            for inst in institutions:
-                name = inst if isinstance(inst, str) else inst.get('name', 'N/A')
-                table_html += f"<tr><td>{name}</td></tr>"
-            table_html += "</table>"
-            html = f"""
-            <h1>Institution List</h1>
-            {MENU_BAR}
-            {table_html}
-            """
-        else:
-            html = f"""
-            <h1>Institution List</h1>
-            {MENU_BAR}
-            <p>No institutions found.</p>
-            """
+        for inst in institutions:
+            name = inst if isinstance(inst, str) else inst.get('name', 'N/A')
+            html += f"<tr><td><a href='#' onclick='showHoldings(\"{name}\")'>{name}</a></td></tr>"
+    
+    html += """
+        </table>
+        <div id="holdingsContainer" class="holdings-table">
+            <button onclick="closeHoldings()">Close</button>
+            <table border='1' id='holdingsTable'></table>
+        </div>
+    </div>
+    <script>
+        function showHoldings(name) {{
+            fetch(`/institution/holdings?name=${{name}}`)
+                .then(response => response.json())
+                .then(data => {{
+                    let table = '<tr><th>Ticker</th><th>Units</th><th>Value</th></tr>';
+                    data.data.forEach(holding => {{
+                        table += `<tr><td>${{holding.ticker}}</td><td>${{holding.units}}</td><td>${{holding.value}}</td></tr>`;
+                    }});
+                    document.getElementById('holdingsTable').innerHTML = table;
+                    document.getElementById('instTable').classList.add('hide');
+                    document.getElementById('holdingsContainer').classList.add('show');
+                }});
+        }}
+        function closeHoldings() {{
+            document.getElementById('instTable').classList.remove('hide');
+            document.getElementById('holdingsContainer').classList.remove('show');
+        }}
+    </script>
+    """
     return render_template_string(html)
+
+@app.route('/institution/holdings')
+def get_institution_holdings():
+    name = request.args.get('name')
+    data = get_api_data(INST_HOLDINGS_API_URL.format(name=name))
+    return jsonify(data)
+
+@app.route('/optionflow', methods=['GET'])
+def option_flow():
+    date = request.args.get('date', datetime.utcnow().strftime('%Y-%m-%d'))
+    sort_col = request.args.get('sort_col', 'start_time')
+    sort_dir = request.args.get('sort_dir', 'desc')
+    limit = int(request.args.get('limit', 100))
+    offset = int(request.args.get('offset', 0))
+
+    # Check database first
+    conn = sqlite3.connect('option_flow.db')
+    c = conn.cursor()
+    c.execute(f"SELECT * FROM option_flow WHERE date = ? ORDER BY {sort_col} {sort_dir} LIMIT ? OFFSET ?", 
+              (date, limit, offset))
+    trades = c.fetchall()
+    conn.close()
+
+    if not trades:
+        params = {"limit": limit, "offset": offset}
+        data = get_api_data(FLOW_API_URL, params=params)
+        if "error" not in data:
+            trades = data.get("data", [])
+            # Store in database
+            conn = sqlite3.connect('option_flow.db')
+            c = conn.cursor()
+            for trade in trades:
+                c.execute("""INSERT OR REPLACE INTO option_flow 
+                            (ticker, type, strike, price, total_size, expiry, start_time, total_premium, alert_rule, date)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                          (trade.get('ticker'), trade.get('type'), trade.get('strike'), trade.get('price'),
+                           trade.get('total_size'), trade.get('expiry'), trade.get('start_time'),
+                           trade.get('total_premium'), trade.get('alert_rule'), date))
+            conn.commit()
+            conn.close()
+
+    html = f"""
+    <h1>Option Flow Alerts</h1>
+    {MENU_BAR}
+    <div>
+        <input type="date" id="dateFilter" value="{date}" onchange="updateFilters()">
+        <button onclick="collectPastData()">Collect Last 15 Days</button>
+        <div id="progress" style="display:none">
+            <progress id="progressBar" value="0" max="15"></progress>
+            <span id="progressMsg"></span>
+        </div>
+    </div>
+    <table border='1' id='flowTable'>
+        <tr>
+            <th><a href="#" onclick="sortTable('ticker')">Ticker</a></th>
+            <th><a href="#" onclick="sortTable('type')">Type</a></th>
+            <th><a href="#" onclick="sortTable('strike')">Strike</a></th>
+            <th><a href="#" onclick="sortTable('price')">Price</a></th>
+            <th><a href="#" onclick="sortTable('total_size')">Total Size</a></th>
+            <th><a href="#" onclick="sortTable('expiry')">Expiry</a></th>
+            <th><a href="#" onclick="sortTable('start_time')">Start Time</a></th>
+            <th><a href="#" onclick="sortTable('total_premium')">Total Premium</a></th>
+            <th><a href="#" onclick="sortTable('alert_rule')">Alert Rule</a></th>
+        </tr>
+    """
+    
+    for trade in trades:
+        start_time = datetime.fromtimestamp(trade[7]/1000).strftime('%Y-%m-%d %H:%M:%S')
+        html += f"""
+        <tr>
+            <td>{trade[1]}</td><td>{trade[2]}</td><td>{trade[3]}</td><td>{trade[4]}</td>
+            <td>{trade[5]}</td><td>{trade[6]}</td><td>{start_time}</td><td>{trade[8]}</td><td>{trade[9]}</td>
+        </tr>
+        """
+
+    html += f"""
+    </table>
+    <script>
+        let currentSort = {{col: '{sort_col}', dir: '{sort_dir}'}};
+        function updateFilters() {{
+            const date = document.getElementById('dateFilter').value;
+            window.location.href = `/optionflow?date=${{date}}&sort_col=${{currentSort.col}}&sort_dir=${{currentSort.dir}}`;
+        }}
+        function sortTable(col) {{
+            const newDir = currentSort.col === col && currentSort.dir === 'desc' ? 'asc' : 'desc';
+            currentSort = {{col: col, dir: newDir}};
+            updateFilters();
+        }}
+        function collectPastData() {{
+            document.getElementById('progress').style.display = 'block';
+            fetch('/collect_past_data', {{method: 'POST'}})
+                .then(response => response.json())
+                .then(data => {{
+                    let progress = 0;
+                    const bar = document.getElementById('progressBar');
+                    const msg = document.getElementById('progressMsg');
+                    const interval = setInterval(() => {{
+                        if (progress >= 15) {{
+                            clearInterval(interval);
+                            msg.textContent = 'Collection Complete: ' + data.trades + ' trades saved';
+                            setTimeout(() => document.getElementById('progress').style.display = 'none', 2000);
+                        }} else {{
+                            progress++;
+                            bar.value = progress;
+                            msg.textContent = `Processing day ${progress} of 15...`;
+                        }}
+                    }}, 500);
+                }});
+        }}
+    </script>
+    """
+    return render_template_string(html)
+
+@app.route('/collect_past_data', methods=['POST'])
+def collect_past_data():
+    def collect_data():
+        total_trades = 0
+        conn = sqlite3.connect('option_flow.db')
+        c = conn.cursor()
+        for i in range(15):
+            date = (datetime.utcnow() - timedelta(days=i)).strftime('%Y-%m-%d')
+            params = {"limit": 500, "offset": 0}
+            data = get_api_data(FLOW_API_URL, params=params)
+            if "error" not in data:
+                trades = data.get("data", [])
+                for trade in trades:
+                    c.execute("""INSERT OR IGNORE INTO option_flow 
+                                (ticker, type, strike, price, total_size, expiry, start_time, total_premium, alert_rule, date)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                              (trade.get('ticker'), trade.get('type'), trade.get('strike'), trade.get('price'),
+                               trade.get('total_size'), trade.get('expiry'), trade.get('start_time'),
+                               trade.get('total_premium'), trade.get('alert_rule'), date))
+                total_trades += len(trades)
+        conn.commit()
+        conn.close()
+        return total_trades
+
+    thread = Thread(target=collect_data)
+    thread.start()
+    return jsonify({"status": "started"})
 
 # Research Page
 @app.route('/research')
@@ -378,4 +436,4 @@ def market_tide():
     return render_template_string(html)
 
 if __name__ == "__main__":
-    app.run()
+    app.run(debug=True)
