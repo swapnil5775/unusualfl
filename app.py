@@ -161,7 +161,6 @@ def option_flow():
         if date:
             query += " WHERE trade_date = %s"
             params.append(date)
-        # Use safe string formatting for ORDER BY
         query += f" ORDER BY {sort_col} {sort_dir} LIMIT %s OFFSET %s"
         params.extend([limit, offset])
         cur.execute(query, params)
@@ -314,7 +313,12 @@ def collect_past_data():
         cur = conn.cursor()
 
         while True:
-            params = {"limit": limit, "offset": offset, "start_time": start_time, "end_time": end_time}
+            params = {
+                "limit": limit,
+                "offset": offset,
+                "start_time": start_time,
+                "end_time": end_time
+            }
             data = get_api_data(FLOW_API_URL, params=params)
             trades = data.get("data", []) if "error" not in data else []
             if not trades:
@@ -325,11 +329,12 @@ def collect_past_data():
                 cur.execute("""
                     INSERT INTO trades (ticker, type, strike, price, total_size, expiry, start_time, total_premium, alert_rule, trade_date)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT DO NOTHING
+                    ON CONFLICT (start_time, ticker) DO NOTHING  -- Use unique constraint
                 """, (
-                    trade.get('ticker'), trade.get('type'), trade.get('strike'), trade.get('price'),
-                    trade.get('total_size'), trade.get('expiry'), trade.get('start_time'),
-                    trade.get('total_premium'), trade.get('alert_rule'), trade_date
+                    trade.get('ticker', 'N/A'), trade.get('type', 'N/A'), trade.get('strike', 0.0),
+                    trade.get('price', 0.0), trade.get('total_size', 0), trade.get('expiry', 'N/A'),
+                    trade.get('start_time', 0), trade.get('total_premium', 0.0), trade.get('alert_rule', 'N/A'),
+                    trade_date
                 ))
             all_trades.extend(trades)
             offset += limit
@@ -533,19 +538,23 @@ def market_tide():
 @app.route('/test-option-flow', methods=['GET'])
 def test_option_flow():
     date = request.args.get('date', datetime.utcnow().strftime('%Y-%m-%d'))
-    
+    page = int(request.args.get('page', 1))
+    limit = 100  # Matches API limit, but we'll paginate from DB
+    offset = (page - 1) * limit
+
     try:
         conn = get_db_connection()
         cur = conn.cursor()
 
-        # Fetch trades for the selected date
-        query = "SELECT * FROM trades WHERE trade_date = %s"
-        cur.execute(query, [date])
+        # Fetch trades for the selected date with pagination
+        query = "SELECT * FROM trades WHERE trade_date = %s ORDER BY start_time DESC LIMIT %s OFFSET %s"
+        cur.execute(query, [date, limit, offset])
         trades = cur.fetchall()
 
         # Count total trades for the date
         cur.execute("SELECT COUNT(*) FROM trades WHERE trade_date = %s", [date])
         total_trades = cur.fetchone()['count']
+        total_pages = (total_trades + limit - 1) // limit
 
         cur.close()
         conn.close()
@@ -592,8 +601,19 @@ def test_option_flow():
             <td>{trade['alert_rule'] or 'N/A'}</td>
         </tr>
         """
-    html += """
+    html += f"""
         </table>
+        <div>
+            <p>Showing {(page - 1) * limit + 1} to {min(page * limit, total_trades)} of {total_trades} trades</p>
+    """
+    if page > 1:
+        prev_url = f"/test-option-flow?date={date}&page={page - 1}"
+        html += f"<a href='{prev_url}'>Previous</a> "
+    if page < total_pages:
+        next_url = f"/test-option-flow?date={date}&page={page + 1}"
+        html += f"<a href='{next_url}'>Next</a>"
+    html += """
+        </div>
     </div>
     """
     return render_template_string(html)
