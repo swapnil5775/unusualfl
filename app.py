@@ -63,6 +63,7 @@ def display_trades():
             """
 
             if filtered_trades:
+                # Build table with additional columns: total_premium and alert_rule
                 table_html = """
                 <table border='1'>
                     <tr>
@@ -73,6 +74,8 @@ def display_trades():
                         <th>Total Size</th>
                         <th>Expiry</th>
                         <th>Start Time</th>
+                        <th>Total Premium</th>
+                        <th>Alert Rule</th>
                     </tr>
                 """
                 for trade in filtered_trades:
@@ -86,6 +89,8 @@ def display_trades():
                         <td>{trade.get('total_size', 'N/A')}</td>
                         <td>{trade.get('expiry', 'N/A')}</td>
                         <td>{start_time}</td>
+                        <td>{trade.get('total_premium', 'N/A')}</td>
+                        <td>{trade.get('alert_rule', 'N/A')}</td>
                     </tr>
                     """
                 table_html += "</table>"
