@@ -413,112 +413,16 @@ def seasonality_etf_market():
                 error = "Unexpected API response: Missing required fields (ticker, month, avg_change)"
                 print(f"Unexpected API response structure: {json.dumps(all_data[:1] if all_data else 'No data', indent=2)}")
             else:
-                # Filter data based on the selected ticker (or show all if 'ALL')
-                data = [item for item in all_data if item['ticker'] == ticker] if ticker != 'ALL' else all_data
-                # Log filtered data length and sample
-                print(f"Filtered Data Length for ticker '{ticker}': {len(data)}")
-                print(f"Filtered Data Sample for ticker '{ticker}': {json.dumps(data[:5] if data else 'Empty filtered data', indent=2)}")
-                # Verify data structure after filtering
-                if data and not any('ticker' in item for item in data):
-                    error = f"Filtered data for ticker '{ticker}' missing 'ticker' field"
-                    print(f"Unexpected filtered data structure: {json.dumps(data[:1] if data else 'No filtered data', indent=2)}")
-                # Check if filtered data matches expected ETFs from curl output
-                if data and ticker != 'ALL' and not any(item['ticker'] == ticker for item in data):
-                    error = f"No data found for ticker '{ticker}' in API response"
-                    print(f"No matching ticker '{ticker}' found in API response: {json.dumps(data[:1] if data else 'No data', indent=2)}")
-    except Exception as e:
-        error = f"Unexpected error fetching data: {str(e)}"
-        print(f"Unexpected Error in seasonality_etf_market: {str(e)}")
-
-    # List of ETF tickers for buttons (defined globally)
-    etf_tickers = ['SPY', 'QQQ', 'IWM', 'XLE', 'XLC', 'XLK', 'XLV', 'XLP', 'XLY', 'XLRE', 'XLF', 'XLI', 'XLB']
-
-    html = """
-    <h1>Seasonality - ETF Market</h1>
-    """ + MENU_BAR + """
-    <div>
-        <h3>Select ETF or View All:</h3>
-        <div>
-            <button onclick="window.location.href='/seasonality/etf-market?ticker=ALL'">ALL</button>
-    """
-    for t in etf_tickers:
-        html += f"""
-            <button onclick="window.location.href='/seasonality/etf-market?ticker={t}'">{t}</button>
-        """
-    html += """
-        </div>
-        {% if error %}<p style="color: red;">Error: {{ error|safe }}</p>{% endif %}
-        {% if not error and not data %}<p>No data available for ticker {{ ticker }}</p>{% endif %}
-        <table border='1' {% if not data %}style="display: none;"{% endif %} id="etfMarketTable">
-            <tr>
-                <th><a href="#" onclick="sortTable('ticker')">Ticker</a></th>
-                <th><a href="#" onclick="sortTable('month')">Month</a></th>
-                <th><a href="#" onclick="sortTable('avg_change')">Avg Change</a></th>
-                <th><a href="#" onclick="sortTable('max_change')">Max Change</a></th>
-                <th><a href="#" onclick="sortTable('median_change')">Median Change</a></th>
-                <th><a href="#" onclick="sortTable('min_change')">Min Change</a></th>
-                <th><a href="#" onclick="sortTable('positive_closes')">Positive Closes</a></th>
-                <th><a href="#" onclick="sortTable('positive_months_perc')">Positive Months %</a></th>
-                <th><a href="#" onclick="sortTable('years')">Years</a></th>
-            </tr>
-    """
-    if data:
-        for item in data:
-            # Convert string values to floats for numerical columns
-            try:
-                avg_change = float(item['avg_change']) if item['avg_change'] else 0.0
-                max_change = float(item['max_change']) if item['max_change'] else 0.0
-                median_change = float(item['median_change']) if item['median_change'] else 0.0
-                min_change = float(item['min_change']) if item['min_change'] else 0.0
-                positive_months_perc = float(item['positive_months_perc']) * 100  # Convert to percentage
-            except (ValueError, TypeError) as e:
-                error = f"Error parsing numerical data for item {item}: {str(e)}"
-                print(f"Error parsing data for item {item}: {str(e)}")
-                continue  # Skip this item and continue with the next
-
-            # Format for display with red color for negative values
-            def format_with_color(value, decimals=2):
-                color = 'red' if value < 0 else 'black'
-                return f'<span style="color: {color}">{value:.{decimals}f}</span>'
-
-            html += f"""
-            <tr>
-                <td>{item['ticker']}</td>
-                <td>{item['month']}</td>
-                <td>{format_with_color(avg_change)}</td>
-                <td>{format_with_color(max_change)}</td>
-                <td>{format_with_color(median_change)}</td>
-                <td>{format_with_color(min_change)}</td>
-                <td>{item['positive_closes']}</td>
-                <td>{positive_months_perc:.2f}%</td>
-                <td>{item['years']}</td>
-            </tr>
-            """
-    html += """
-        </table>
-    </div>
-    <script>
-        let sortState = { col: 'ticker', dir: 'asc' };
-
-        function sortTable(col) {
-            const newDir = sortState.col === col && sortState.dir === 'asc' ? 'desc' : 'asc';
-            sortState = { col: col, dir: newDir };
-
-            let url = `/seasonality/etf-market?ticker={ticker}&sort_col=${col}&sort_dir=${newDir}`;
-            window.location.href = url;
-        }
-
-        // Apply sorting if query parameters exist
-        const urlParams = new URLSearchParams(window.location.search);
-        const sortCol = urlParams.get('sort_col');
-        const sortDir = urlParams.get('sort_dir');
-        if (sortCol && sortDir) {
-            sortState.col = sortCol;
-            sortState.dir = sortDir;
-        }
-    </script>
-    """
-    return render_template_string(html)
+                # Clean and normalize ticker values from API response to match our filtering
+                normalized_all_data = []
+                for item in all_data:
+                    if 'ticker' in item and 'month' in item and 'avg_change' in item:
+                        normalized_item = {
+                            'ticker': item['ticker'].strip().upper() if isinstance(item['ticker'], str) else str(item['ticker']).strip().upper(),
+                            'month': item['month'],
+                            'avg_change': item['avg_change'],
+                            'max_change': item['max_change'],
+                            'median_change': item['median_change
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
