@@ -70,26 +70,28 @@ def institution_list():
         </div>
     </div>
     <script>
-        function showHoldings(name) {{
-            fetch(`/institution/holdings?name=${{name}}`)
+        function showHoldings(name) {
+            fetch(`/institution/holdings?name=${encodeURIComponent(name)}`)
                 .then(response => response.json())
-                .then(data => {{
+                .then(data => {
                     let table = '<tr><th>Ticker</th><th>Units</th><th>Value</th></tr>';
-                    if (data.data) {{
-                        data.data.forEach(holding => {{
-                            table += `<tr><td>${{holding.ticker || 'N/A'}}</td><td>${{holding.units || 'N/A'}}</td><td>${{holding.value || 'N/A'}}</td></tr>`;
-                        }});
-                    }}
+                    if (data.data) {
+                        data.data.forEach(holding => {
+                            table += '<tr><td>' + (holding.ticker || 'N/A') + '</td><td>' + 
+                                    (holding.units || 'N/A') + '</td><td>' + 
+                                    (holding.value || 'N/A') + '</td></tr>';
+                        });
+                    }
                     document.getElementById('holdingsTable').innerHTML = table;
                     document.getElementById('instTable').classList.add('hide');
                     document.getElementById('holdingsContainer').classList.add('show');
-                }})
+                })
                 .catch(error => console.error('Error:', error));
-        }}
-        function closeHoldings() {{
+        }
+        function closeHoldings() {
             document.getElementById('instTable').classList.remove('hide');
             document.getElementById('holdingsContainer').classList.remove('show');
-        }}
+        }
     </script>
     """
     return render_template_string(html)
