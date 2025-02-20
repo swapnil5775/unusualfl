@@ -15,33 +15,41 @@ INST_LIST_API_URL = "https://api.unusualwhales.com/api/institutions"
 INST_HOLDINGS_API_URL = "https://api.unusualwhales.com/api/institution/{name}/holdings"
 MARKET_TIDE_API_URL = "https://api.unusualwhales.com/api/v1/market-tide"
 
-# Database connection
+# Database connection with error handling
 def get_db_connection():
-    conn = psycopg2.connect(os.environ["POSTGRES_URL"], cursor_factory=RealDictCursor)
-    return conn
+    try:
+        conn = psycopg2.connect(os.environ["POSTGRES_URL"], cursor_factory=RealDictCursor)
+        return conn
+    except KeyError:
+        raise Exception("POSTGRES_URL environment variable not set")
+    except psycopg2.Error as e:
+        raise Exception(f"Database connection failed: {str(e)}")
 
 # Initialize database table
 def init_db():
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS trades (
-            id SERIAL PRIMARY KEY,
-            ticker TEXT,
-            type TEXT,
-            strike REAL,
-            price REAL,
-            total_size INTEGER,
-            expiry TEXT,
-            start_time BIGINT,
-            total_premium REAL,
-            alert_rule TEXT,
-            trade_date DATE
-        )
-    """)
-    conn.commit()
-    cur.close()
-    conn.close()
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS trades (
+                id SERIAL PRIMARY KEY,
+                ticker TEXT,
+                type TEXT,
+                strike REAL,
+                price REAL,
+                total_size INTEGER,
+                expiry TEXT,
+                start_time BIGINT,
+                total_premium REAL,
+                alert_rule TEXT,
+                trade_date DATE
+            )
+        """)
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"Failed to initialize database: {str(e)}")
 
 init_db()  # Run on startup
 
@@ -142,37 +150,40 @@ def option_flow():
     limit = int(request.args.get('limit', 100))
     offset = int(request.args.get('offset', 0))
 
-    conn = get_db_connection()
-    cur = conn.cursor()
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
 
-    # Fetch trades from DB
-    query = "SELECT * FROM trades"
-    params = []
-    if date:
-        query += " WHERE trade_date = %s"
-        params.append(date)
-    query += f" ORDER BY {sort_col} {sort_dir} LIMIT %s OFFSET %s"
-    params.extend([limit, offset])
-    cur.execute(query, params)
-    trades = cur.fetchall()
+        # Fetch trades from DB
+        query = "SELECT * FROM trades"
+        params = []
+        if date:
+            query += " WHERE trade_date = %s"
+            params.append(date)
+        query += f" ORDER BY {sort_col} {sort_dir} LIMIT %s OFFSET %s"
+        params.extend([limit, offset])
+        cur.execute(query, params)
+        trades = cur.fetchall()
 
-    # Total trades
-    cur.execute("SELECT COUNT(*) FROM trades" + (" WHERE trade_date = %s" if date else ""), ([date] if date else []))
-    total_trades = cur.fetchone()['count']
+        # Total trades
+        cur.execute("SELECT COUNT(*) FROM trades" + (" WHERE trade_date = %s" if date else ""), ([date] if date else []))
+        total_trades = cur.fetchone()['count']
 
-    # Last 5 days stats
-    cur.execute("""
-        SELECT trade_date, COUNT(*) as trade_count, SUM(total_premium) as total_premium
-        FROM trades
-        WHERE trade_date >= %s
-        GROUP BY trade_date
-        ORDER BY trade_date DESC
-        LIMIT 5
-    """, [datetime.utcnow().date() - timedelta(days=4)])
-    daily_stats = cur.fetchall()
+        # Last 5 days stats
+        cur.execute("""
+            SELECT trade_date, COUNT(*) as trade_count, SUM(total_premium) as total_premium
+            FROM trades
+            WHERE trade_date >= %s
+            GROUP BY trade_date
+            ORDER BY trade_date DESC
+            LIMIT 5
+        """, [datetime.utcnow().date() - timedelta(days=4)])
+        daily_stats = cur.fetchall()
 
-    cur.close()
-    conn.close()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        return f"Error accessing database: {str(e)}", 500
 
     html = f"""
     <h1>Option Flow Alerts</h1>
@@ -291,35 +302,39 @@ def collect_past_data():
     start_time = int(start_date.timestamp() * 1000)
     end_time = int(end_date.timestamp() * 1000)
 
-    conn = get_db_connection()
-    cur = conn.cursor()
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
 
-    while True:
-        params = {"limit": limit, "offset": offset, "start_time": start_time, "end_time": end_time}
-        data = get_api_data(FLOW_API_URL, params=params)
-        trades = data.get("data", []) if "error" not in data else []
-        if not trades:
-            break
-        
-        for trade in trades:
-            trade_date = datetime.fromtimestamp(trade.get('start_time', 0) / 1000).date()
-            cur.execute("""
-                INSERT INTO trades (ticker, type, strike, price, total_size, expiry, start_time, total_premium, alert_rule, trade_date)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT DO NOTHING
-            """, (
-                trade.get('ticker'), trade.get('type'), trade.get('strike'), trade.get('price'),
-                trade.get('total_size'), trade.get('expiry'), trade.get('start_time'),
-                trade.get('total_premium'), trade.get('alert_rule'), trade_date
-            ))
-        all_trades.extend(trades)
-        offset += limit
-        if len(trades) < limit:
-            break
+        while True:
+            params = {"limit": limit, "offset": offset, "start_time": start_time, "end_time": end_time}
+            data = get_api_data(FLOW_API_URL, params=params)
+            trades = data.get("data", []) if "error" not in data else []
+            if not trades:
+                break
+            
+            for trade in trades:
+                trade_date = datetime.fromtimestamp(trade.get('start_time', 0) / 1000).date()
+                cur.execute("""
+                    INSERT INTO trades (ticker, type, strike, price, total_size, expiry, start_time, total_premium, alert_rule, trade_date)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT DO NOTHING
+                """, (
+                    trade.get('ticker'), trade.get('type'), trade.get('strike'), trade.get('price'),
+                    trade.get('total_size'), trade.get('expiry'), trade.get('start_time'),
+                    trade.get('total_premium'), trade.get('alert_rule'), trade_date
+                ))
+            all_trades.extend(trades)
+            offset += limit
+            if len(trades) < limit:
+                break
 
-    conn.commit()
-    cur.close()
-    conn.close()
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        return jsonify({"error": f"Failed to collect data: {str(e)}"}), 500
+
     return jsonify({"trades": len(all_trades), "message": f"Collected and stored {len(all_trades)} trades"})
 
 @app.route('/research')
