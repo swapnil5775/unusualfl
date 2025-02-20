@@ -8,6 +8,7 @@ app = Flask(__name__)
 # API configuration (hardcoded for testing)
 APIKEY = "bd0cf36c-5072-4b1e-87ee-7e278b8a02e5"
 FLOW_API_URL = "https://api.unusualwhales.com/api/option-trades/flow-alerts"
+INST_LIST_API_URL = "https://api.unusualwhales.com/api/institutions"
 INST_ACTIVITY_API_URL = "https://api.unusualwhales.com/api/institution/{name}/activity"
 INST_HOLDINGS_API_URL = "https://api.unusualwhales.com/api/institution/{name}/holdings"
 
@@ -25,9 +26,30 @@ def get_api_data(url, params=None):
     except requests.RequestException as e:
         return {"error": f"API Error: {str(e)} - Status Code: {e.response.status_code if e.response else 'No response'}"}
 
-# Home page (Option Flow Alerts)
+# Menu bar template
+MENU_BAR = """
+<div style="background-color: #f8f8f8; padding: 10px;">
+    <a href="/" style="margin-right: 20px;">Home</a>
+    <a href="/optionflow" style="margin-right: 20px;">Option Flow</a>
+    <a href="/institution/list" style="margin-right: 20px;">Institution List</a>
+    <a href="/institution/activity" style="margin-right: 20px;">Recent Activity</a>
+    <a href="/institution/holdings" style="margin-right: 20px;">Holdings</a>
+</div>
+"""
+
+# Main Page
 @app.route('/')
-def display_trades():
+def home():
+    html = f"""
+    <h1>Unusual Whales Dashboard</h1>
+    {MENU_BAR}
+    <p>Welcome to the Unusual Whales Dashboard. Select a page from the menu above.</p>
+    """
+    return render_template_string(html)
+
+# Option Flow Page
+@app.route('/optionflow')
+def option_flow():
     try:
         days = int(request.args.get('days', 1))
         if days not in [1, 2, 3]:
@@ -36,7 +58,7 @@ def display_trades():
 
         data = get_api_data(FLOW_API_URL, params={"limit": 1000})
         if "error" in data:
-            html = f"<h1>Unusual Whales Option Flow Alerts</h1><p>{data['error']}</p>"
+            html = f"<h1>Option Flow Alerts</h1>{MENU_BAR}<p>{data['error']}</p>"
         else:
             parsed_data = data["json"]
             trades = parsed_data.get("data", []) if isinstance(parsed_data, dict) else parsed_data
@@ -47,12 +69,11 @@ def display_trades():
             ]
 
             button_html = """
-            <form method="GET" style="display: inline;">
+            <form method="GET" style="margin-top: 10px;">
                 <button type="submit" name="days" value="1">1D</button>
                 <button type="submit" name="days" value="2">2D</button>
                 <button type="submit" name="days" value="3">3D</button>
             </form>
-            <a href="/institution"><button>Institution</button></a>
             """
 
             if filtered_trades:
@@ -79,7 +100,8 @@ def display_trades():
                     """
                 table_html += "</table>"
                 html = f"""
-                <h1>Unusual Whales Option Flow Alerts</h1>
+                <h1>Option Flow Alerts</h1>
+                {MENU_BAR}
                 {button_html}
                 <p>Total trades pulled: {total_trades}</p>
                 <p>Found {len(filtered_trades)} trades with size = 1001 in the last {days} day(s):</p>
@@ -87,46 +109,65 @@ def display_trades():
                 """
             else:
                 html = f"""
-                <h1>Unusual Whales Option Flow Alerts</h1>
+                <h1>Option Flow Alerts</h1>
+                {MENU_BAR}
                 {button_html}
                 <p>Total trades pulled: {total_trades}</p>
                 <p>No trades with size = 1001 found in the last {days} day(s).</p>
                 """
         return render_template_string(html)
     except Exception as e:
-        return render_template_string("<h1>Unusual Whales Option Flow Alerts</h1><p>Internal Server Error: {{ error }}</p>", error=str(e))
+        return render_template_string(f"<h1>Option Flow Alerts</h1>{MENU_BAR}<p>Internal Server Error: {{ error }}</p>", error=str(e))
 
-# Institution main page
-@app.route('/institution')
-def institution_home():
-    button_html = """
-    <a href="/"><button>Option Flow</button></a>
-    <a href="/institution/activity"><button>Recent Activity</button></a>
-    <a href="/institution/holdings"><button>Holdings</button></a>
-    """
-    html = f"""
-    <h1>Unusual Whales Institution Data</h1>
-    {button_html}
-    <p>Select a sub-page to view institution data.</p>
-    """
+# Institution List Page
+@app.route('/institution/list')
+def institution_list():
+    data = get_api_data(INST_LIST_API_URL)
+    if "error" in data:
+        html = f"""
+        <h1>Institution List</h1>
+        {MENU_BAR}
+        <p>{data['error']}</p>
+        """
+    else:
+        parsed_data = data["json"]
+        institutions = parsed_data.get("data", []) if isinstance(parsed_data, dict) else parsed_data
+        if institutions:
+            table_html = """
+            <table border='1'>
+                <tr><th>Name</th></tr>
+            """
+            for inst in institutions:
+                name = inst if isinstance(inst, str) else inst.get('name', 'N/A')  # Adjust based on actual API response structure
+                table_html += f"""
+                <tr>
+                    <td><a href="/institution/activity?name={name}">{name}</a></td>
+                </tr>
+                """
+            table_html += "</table>"
+            html = f"""
+            <h1>Institution List</h1>
+            {MENU_BAR}
+            {table_html}
+            """
+        else:
+            html = f"""
+            <h1>Institution List</h1>
+            {MENU_BAR}
+            <p>No institutions found.</p>
+            """
     return render_template_string(html)
 
-# Recent Activity sub-page
+# Recent Activity Sub-Page
 @app.route('/institution/activity')
 def institution_activity():
-    default_institution = "BlackRock"  # Default institution name
-    data = get_api_data(INST_ACTIVITY_API_URL.format(name=default_institution))
-
-    button_html = """
-    <a href="/"><button>Option Flow</button></a>
-    <a href="/institution"><button>Institution Home</button></a>
-    <a href="/institution/holdings"><button>Holdings</button></a>
-    """
+    institution_name = request.args.get('name', 'BlackRock')  # Default to BlackRock
+    data = get_api_data(INST_ACTIVITY_API_URL.format(name=institution_name))
 
     if "error" in data:
         html = f"""
-        <h1>Institution Recent Activity</h1>
-        {button_html}
+        <h1>Recent Activity ({institution_name})</h1>
+        {MENU_BAR}
         <p>{data['error']}</p>
         """
     else:
@@ -153,31 +194,26 @@ def institution_activity():
                 """
             table_html += "</table>"
             html = f"""
-            <h1>Institution Recent Activity ({default_institution})</h1>
-            {button_html}
+            <h1>Recent Activity ({institution_name})</h1>
+            {MENU_BAR}
             {table_html}
             """
         else:
             html = f"""
-            <h1>Institution Recent Activity ({default_institution})</h1>
-            {button_html}
-            <p>No recent activity found for {default_institution}.</p>
+            <h1>Recent Activity ({institution_name})</h1>
+            {MENU_BAR}
+            <p>No recent activity found for {institution_name}.</p>
             """
     return render_template_string(html)
 
-# Holdings sub-page with search
+# Holdings Sub-Page
 @app.route('/institution/holdings', methods=['GET'])
 def institution_holdings():
     institution_name = request.args.get('name', 'BlackRock')  # Default to BlackRock
     data = get_api_data(INST_HOLDINGS_API_URL.format(name=institution_name))
 
-    button_html = """
-    <a href="/"><button>Option Flow</button></a>
-    <a href="/institution"><button>Institution Home</button></a>
-    <a href="/institution/activity"><button>Recent Activity</button></a>
-    """
     search_html = f"""
-    <form method="GET">
+    <form method="GET" style="margin-top: 10px;">
         <input type="text" name="name" value="{institution_name}" placeholder="Enter institution name">
         <button type="submit">Search</button>
     </form>
@@ -185,8 +221,8 @@ def institution_holdings():
 
     if "error" in data:
         html = f"""
-        <h1>Institution Holdings ({institution_name})</h1>
-        {button_html}
+        <h1>Holdings ({institution_name})</h1>
+        {MENU_BAR}
         {search_html}
         <p>{data['error']}</p>
         """
@@ -213,15 +249,15 @@ def institution_holdings():
                 """
             table_html += "</table>"
             html = f"""
-            <h1>Institution Holdings ({institution_name})</h1>
-            {button_html}
+            <h1>Holdings ({institution_name})</h1>
+            {MENU_BAR}
             {search_html}
             {table_html}
             """
         else:
             html = f"""
-            <h1>Institution Holdings ({institution_name})</h1>
-            {button_html}
+            <h1>Holdings ({institution_name})</h1>
+            {MENU_BAR}
             {search_html}
             <p>No holdings found for {institution_name}.</p>
             """
