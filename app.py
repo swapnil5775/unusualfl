@@ -9,7 +9,6 @@ app = Flask(__name__)
 APIKEY = "bd0cf36c-5072-4b1e-87ee-7e278b8a02e5"
 FLOW_API_URL = "https://api.unusualwhales.com/api/option-trades/flow-alerts"
 INST_LIST_API_URL = "https://api.unusualwhales.com/api/institutions"
-INST_ACTIVITY_API_URL = "https://api.unusualwhales.com/api/institution/{name}/activity"
 INST_HOLDINGS_API_URL = "https://api.unusualwhales.com/api/institution/{name}/holdings"
 
 def get_api_data(url, params=None):
@@ -17,14 +16,9 @@ def get_api_data(url, params=None):
     try:
         response = requests.get(url, headers=headers, params=params)
         response.raise_for_status()
-        raw_text = response.text
-        try:
-            parsed_data = response.json()
-            return {"text": raw_text, "json": parsed_data}
-        except json.JSONDecodeError as e:
-            return {"error": f"JSON Parse Error: {str(e)} - Raw Response: {raw_text}"}
-    except requests.RequestException as e:
-        return {"error": f"API Error: {str(e)} - Status Code: {e.response.status_code if e.response else 'No response'}"}
+        return response.json()
+    except (requests.RequestException, json.JSONDecodeError) as e:
+        return {"error": str(e)}
 
 # Menu bar template
 MENU_BAR = """
@@ -32,8 +26,7 @@ MENU_BAR = """
     <a href="/" style="margin-right: 20px;">Home</a>
     <a href="/optionflow" style="margin-right: 20px;">Option Flow</a>
     <a href="/institution/list" style="margin-right: 20px;">Institution List</a>
-    <a href="/institution/activity" style="margin-right: 20px;">Recent Activity</a>
-    <a href="/institution/holdings" style="margin-right: 20px;">Holdings</a>
+    <a href="/research" style="margin-right: 20px;">Research</a>
 </div>
 """
 
@@ -60,8 +53,7 @@ def option_flow():
         if "error" in data:
             html = f"<h1>Option Flow Alerts</h1>{MENU_BAR}<p>{data['error']}</p>"
         else:
-            parsed_data = data["json"]
-            trades = parsed_data.get("data", []) if isinstance(parsed_data, dict) else parsed_data
+            trades = data.get("data", [])
             total_trades = len(trades)
             filtered_trades = [
                 trade for trade in trades
@@ -117,7 +109,7 @@ def option_flow():
                 """
         return render_template_string(html)
     except Exception as e:
-        return render_template_string(f"<h1>Option Flow Alerts</h1>{MENU_BAR}<p>Internal Server Error: {{ error }}</p>", error=str(e))
+        return render_template_string(f"<h1>Option Flow Alerts</h1>{MENU_BAR}<p>Internal Server Error: {e}</p>")
 
 # Institution List Page
 @app.route('/institution/list')
@@ -130,20 +122,15 @@ def institution_list():
         <p>{data['error']}</p>
         """
     else:
-        parsed_data = data["json"]
-        institutions = parsed_data.get("data", []) if isinstance(parsed_data, dict) else parsed_data
+        institutions = data.get("data", []) if isinstance(data, dict) else data
         if institutions:
             table_html = """
             <table border='1'>
                 <tr><th>Name</th></tr>
             """
             for inst in institutions:
-                name = inst if isinstance(inst, str) else inst.get('name', 'N/A')  # Adjust based on actual API response structure
-                table_html += f"""
-                <tr>
-                    <td><a href="/institution/activity?name={name}">{name}</a></td>
-                </tr>
-                """
+                name = inst if isinstance(inst, str) else inst.get('name', 'N/A')
+                table_html += f"<tr><td>{name}</td></tr>"
             table_html += "</table>"
             html = f"""
             <h1>Institution List</h1>
@@ -158,109 +145,100 @@ def institution_list():
             """
     return render_template_string(html)
 
-# Recent Activity Sub-Page
-@app.route('/institution/activity')
-def institution_activity():
-    institution_name = request.args.get('name', 'BlackRock')  # Default to BlackRock
-    data = get_api_data(INST_ACTIVITY_API_URL.format(name=institution_name))
-
-    if "error" in data:
+# Research Page
+@app.route('/research')
+def research():
+    # Fetch institution list
+    inst_data = get_api_data(INST_LIST_API_URL)
+    if "error" in inst_data:
         html = f"""
-        <h1>Recent Activity ({institution_name})</h1>
+        <h1>Research</h1>
         {MENU_BAR}
-        <p>{data['error']}</p>
+        <p>Error fetching institution list: {inst_data['error']}</p>
         """
-    else:
-        parsed_data = data["json"]
-        activities = parsed_data.get("data", []) if isinstance(parsed_data, dict) else parsed_data
-        if activities:
-            table_html = """
-            <table border='1'>
-                <tr>
-                    <th>Ticker</th><th>Units</th><th>Units Change</th><th>Avg Price</th><th>Total Premium</th><th>Filing Date</th><th>Report Date</th>
-                </tr>
-            """
-            for activity in activities:
-                table_html += f"""
-                <tr>
-                    <td>{activity.get('ticker', 'N/A')}</td>
-                    <td>{activity.get('units', 'N/A')}</td>
-                    <td>{activity.get('units_change', 'N/A')}</td>
-                    <td>{activity.get('avg_price', 'N/A')}</td>
-                    <td>{activity.get('total_premium', 'N/A')}</td>
-                    <td>{activity.get('filing_date', 'N/A')}</td>
-                    <td>{activity.get('report_date', 'N/A')}</td>
-                </tr>
-                """
-            table_html += "</table>"
-            html = f"""
-            <h1>Recent Activity ({institution_name})</h1>
-            {MENU_BAR}
-            {table_html}
-            """
-        else:
-            html = f"""
-            <h1>Recent Activity ({institution_name})</h1>
-            {MENU_BAR}
-            <p>No recent activity found for {institution_name}.</p>
-            """
-    return render_template_string(html)
+        return render_template_string(html)
 
-# Holdings Sub-Page
-@app.route('/institution/holdings', methods=['GET'])
-def institution_holdings():
-    institution_name = request.args.get('name', 'BlackRock')  # Default to BlackRock
-    data = get_api_data(INST_HOLDINGS_API_URL.format(name=institution_name))
+    institutions = inst_data.get("data", [])[:5]  # Limit to 5 for demo; remove slice for full list
+    holdings_master = {}
 
-    search_html = f"""
-    <form method="GET" style="margin-top: 10px;">
-        <input type="text" name="name" value="{institution_name}" placeholder="Enter institution name">
-        <button type="submit">Search</button>
-    </form>
+    # Aggregate holdings from all institutions
+    for inst in institutions:
+        name = inst if isinstance(inst, str) else inst.get('name', 'N/A')
+        holdings_data = get_api_data(INST_HOLDINGS_API_URL.format(name=name))
+        if "error" not in holdings_data:
+            holdings = holdings_data.get("data", [])
+            for holding in holdings:
+                ticker = holding.get("ticker")
+                units = float(holding.get("units", 0) or 0)
+                if ticker:
+                    if ticker not in holdings_master:
+                        holdings_master[ticker] = {}
+                    holdings_master[ticker][name] = units
+
+    # Master table
+    table_html = """
+    <table border='1' id="masterTable">
+        <tr><th>Ticker</th><th>Total Units</th></tr>
+    """
+    ticker_options = ""
+    for ticker, inst_holdings in holdings_master.items():
+        total_units = sum(inst_holdings.values())
+        table_html += f"<tr><td>{ticker}</td><td>{total_units}</td></tr>"
+        ticker_options += f"<option value='{ticker}'>{ticker}</option>"
+    table_html += "</table>"
+
+    # Chart.js setup
+    chart_html = f"""
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <select id="tickerSelect" onchange="updateChart()">
+        <option value="">Select a Ticker</option>
+        {ticker_options}
+    </select>
+    <canvas id="holdingsChart" width="400" height="200"></canvas>
+    <script>
+        const holdingsData = {json.dumps(holdings_master)};
+        let chart;
+
+        function updateChart() {{
+            const ticker = document.getElementById('tickerSelect').value;
+            if (!ticker) return;
+
+            const ctx = document.getElementById('holdingsChart').getContext('2d');
+            const data = holdingsData[ticker] || {{}};
+            const labels = Object.keys(data);
+            const values = Object.values(data);
+
+            if (chart) chart.destroy();
+            chart = new Chart(ctx, {{
+                type: 'bar',
+                data: {{
+                    labels: labels,
+                    datasets: [{{
+                        label: 'Units Held',
+                        data: values,
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1
+                    }}]
+                }},
+                options: {{
+                    scales: {{
+                        y: {{ beginAtZero: true }}
+                    }}
+                }}
+            }});
+        }}
+    </script>
     """
 
-    if "error" in data:
-        html = f"""
-        <h1>Holdings ({institution_name})</h1>
-        {MENU_BAR}
-        {search_html}
-        <p>{data['error']}</p>
-        """
-    else:
-        parsed_data = data["json"]
-        holdings = parsed_data.get("data", []) if isinstance(parsed_data, dict) else parsed_data
-        if holdings:
-            table_html = """
-            <table border='1'>
-                <tr>
-                    <th>Ticker</th><th>Units</th><th>Units Change</th><th>Avg Price</th><th>Filing Date</th><th>Report Date</th>
-                </tr>
-            """
-            for holding in holdings:
-                table_html += f"""
-                <tr>
-                    <td>{holding.get('ticker', 'N/A')}</td>
-                    <td>{holding.get('units', 'N/A')}</td>
-                    <td>{holding.get('units_change', 'N/A')}</td>
-                    <td>{holding.get('avg_price', 'N/A')}</td>
-                    <td>{holding.get('filing_date', 'N/A')}</td>
-                    <td>{holding.get('report_date', 'N/A')}</td>
-                </tr>
-                """
-            table_html += "</table>"
-            html = f"""
-            <h1>Holdings ({institution_name})</h1>
-            {MENU_BAR}
-            {search_html}
-            {table_html}
-            """
-        else:
-            html = f"""
-            <h1>Holdings ({institution_name})</h1>
-            {MENU_BAR}
-            {search_html}
-            <p>No holdings found for {institution_name}.</p>
-            """
+    html = f"""
+    <h1>Research</h1>
+    {MENU_BAR}
+    <h2>All Institution Holdings</h2>
+    {table_html}
+    <h2>Holdings by Institution</h2>
+    {chart_html}
+    """
     return render_template_string(html)
 
 if __name__ == "__main__":
