@@ -43,30 +43,77 @@ def home():
     return render_template_string(html)
 
 # Option Flow Page
-@app.route('/optionflow')
+@app.route('/optionflow', methods=['GET'])
 def option_flow():
     try:
+        # Get query parameters
         days = int(request.args.get('days', 1))
-        if days not in [1, 2, 3]:
+        if days not in [1, 2, 3, 7]:
             days = 1
-        cutoff_time = int((datetime.utcnow() - timedelta(days=days)).timestamp() * 1000)
+        ticker = request.args.get('ticker', '').strip()
+        limit = int(request.args.get('limit', 100))
+        if limit not in [100, 500]:
+            limit = 100
+        offset = int(request.args.get('offset', 0))
 
-        data = get_api_data(FLOW_API_URL, params={"limit": 1000})
+        cutoff_time = int((datetime.utcnow() - timedelta(days=days)).timestamp() * 1000)
+        params = {"limit": limit, "offset": offset}
+        data = get_api_data(FLOW_API_URL, params=params)
+
         if "error" in data:
             html = f"<h1>Option Flow Alerts</h1>{MENU_BAR}<p>{data['error']}</p>"
         else:
             trades = data.get("data", [])
-            total_trades = len(trades)
-            filtered_trades = [
-                trade for trade in trades
-                if trade.get("total_size") == 1001 and trade.get("start_time", 0) >= cutoff_time
-            ]
+            total_trades = len(trades)  # This is per page; API might not return total count
 
-            button_html = """
-            <form method="GET" style="margin-top: 10px;">
+            # Filter by ticker if provided
+            if ticker:
+                trades = [trade for trade in trades if trade.get("ticker", "").lower() == ticker.lower()]
+
+            # Filter by time
+            filtered_trades = [trade for trade in trades if trade.get("start_time", 0) >= cutoff_time]
+
+            # Navigation and filter form
+            button_html = f"""
+            <form method="GET" style="margin-top: 10px; text-align: center;">
                 <button type="submit" name="days" value="1">1D</button>
                 <button type="submit" name="days" value="2">2D</button>
                 <button type="submit" name="days" value="3">3D</button>
+                <button type="submit" name="days" value="7">7D</button>
+                <input type="hidden" name="limit" value="{limit}">
+                <input type="hidden" name="offset" value="{offset}">
+                <input type="hidden" name="ticker" value="{ticker}">
+            </form>
+            <form method="GET" style="margin-top: 10px; text-align: center;">
+                <input type="text" name="ticker" value="{ticker}" placeholder="Filter by Ticker">
+                <button type="submit">Filter</button>
+                <input type="hidden" name="days" value="{days}">
+                <input type="hidden" name="limit" value="{limit}">
+                <input type="hidden" name="offset" value="0"> <!-- Reset offset on filter -->
+            </form>
+            """
+
+            # Pagination button (Next Page)
+            next_offset = offset + limit
+            pagination_html = f"""
+            <div style="text-align: center; margin-top: 10px;">
+                <a href="/optionflow?days={days}&ticker={ticker}&limit={limit}&offset={next_offset}">
+                    <button>Next Page</button>
+                </a>
+            </div>
+            """
+
+            # Results limit dropdown
+            limit_html = f"""
+            <form method="GET" style="margin-top: 10px; text-align: center;">
+                <label>Results per page: </label>
+                <select name="limit" onchange="this.form.submit()">
+                    <option value="100" {'selected' if limit == 100 else ''}>100</option>
+                    <option value="500" {'selected' if limit == 500 else ''}>500</option>
+                </select>
+                <input type="hidden" name="days" value="{days}">
+                <input type="hidden" name="ticker" value="{ticker}">
+                <input type="hidden" name="offset" value="0"> <!-- Reset offset on limit change -->
             </form>
             """
 
@@ -96,18 +143,20 @@ def option_flow():
                 html = f"""
                 <h1>Option Flow Alerts</h1>
                 {MENU_BAR}
+                {pagination_html}
                 {button_html}
-                <p>Total trades pulled: {total_trades}</p>
-                <p>Found {len(filtered_trades)} trades with size = 1001 in the last {days} day(s):</p>
+                <p>Showing {len(filtered_trades)} trades (filtered from {total_trades} pulled) in the last {days} day(s):</p>
                 {table_html}
+                {limit_html}
                 """
             else:
                 html = f"""
                 <h1>Option Flow Alerts</h1>
                 {MENU_BAR}
+                {pagination_html}
                 {button_html}
-                <p>Total trades pulled: {total_trades}</p>
-                <p>No trades with size = 1001 found in the last {days} day(s).</p>
+                <p>No trades found in the last {days} day(s) with current filters (from {total_trades} pulled).</p>
+                {limit_html}
                 """
         return render_template_string(html)
     except Exception as e:
@@ -163,7 +212,6 @@ def research():
     holdings_master = {}
     inst_totals = {}
 
-    # Aggregate holdings and calculate total units per institution
     for inst in institutions:
         name = inst if isinstance(inst, str) else inst.get('name', 'N/A')
         holdings_data = get_api_data(INST_HOLDINGS_API_URL.format(name=name))
@@ -180,10 +228,8 @@ def research():
                     holdings_master[ticker][name] = units
             inst_totals[name] = total_units
 
-    # Sort institutions by total holdings (descending)
-    inst_names = sorted(inst_totals.keys(), key=lambda x: inst_totals[x], reverse=True)[:10]  # Top 10
+    inst_names = sorted(inst_totals.keys(), key=lambda x: inst_totals[x], reverse=True)[:10]
 
-    # Master table with sorted institution columns
     table_html = "<table border='1' id='masterTable'><tr><th>Ticker</th><th>Total Units</th>"
     for name in inst_names:
         table_html += f"<th>{name}</th>"
@@ -201,7 +247,6 @@ def research():
         ticker_options += f"<option value='{ticker}'>{ticker}</option>"
     table_html += "</table>"
 
-    # Horizontal bar chart for top 10 institutions
     chart_html = f"""
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <select id="tickerSelect" onchange="updateChart()">
@@ -221,9 +266,9 @@ def research():
             const data = holdingsData[ticker] || {{}};
             const allLabels = Object.keys(data);
             const allValues = Object.values(data);
-            const sortedData = allLabels.map((label, idx) => ({ label: label, value: allValues[idx] }))
+            const sortedData = allLabels.map((label, idx) => ({{ label: label, value: allValues[idx] }}))
                 .sort((a, b) => b.value - a.value)
-                .slice(0, 10); // Top 10
+                .slice(0, 10);
             const labels = sortedData.map(d => d.label);
             const values = sortedData.map(d => d.value);
 
@@ -241,7 +286,7 @@ def research():
                     }}]
                 }},
                 options: {{
-                    indexAxis: 'y', // Horizontal bars
+                    indexAxis: 'y',
                     scales: {{
                         x: {{ beginAtZero: true, title: {{ display: true, text: 'Units Held' }} }},
                         y: {{ title: {{ display: true, text: 'Institution' }} }}
