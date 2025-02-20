@@ -69,6 +69,7 @@ MENU_BAR = """
     <a href="/institution/list" style="margin-right: 20px;">Institution List</a>
     <a href="/research" style="margin-right: 20px;">Research</a>
     <a href="/market-tide" style="margin-right: 20px;">Market Tide</a>
+    <a href="/test-option-flow" style="margin-right: 20px;">Test Option Flow</a>
 </div>
 """
 
@@ -527,6 +528,74 @@ def market_tide():
             {form_html}
             {chart_html}
             """
+    return render_template_string(html)
+
+@app.route('/test-option-flow', methods=['GET'])
+def test_option_flow():
+    date = request.args.get('date', datetime.utcnow().strftime('%Y-%m-%d'))
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Fetch trades for the selected date
+        query = "SELECT * FROM trades WHERE trade_date = %s"
+        cur.execute(query, [date])
+        trades = cur.fetchall()
+
+        # Count total trades for the date
+        cur.execute("SELECT COUNT(*) FROM trades WHERE trade_date = %s", [date])
+        total_trades = cur.fetchone()['count']
+
+        cur.close()
+        conn.close()
+    except Exception as e:
+        return f"Error testing option flow for date {date}: {str(e)}", 500
+
+    html = f"""
+    <h1>Test Option Flow by Date</h1>
+    {MENU_BAR}
+    <div>
+        <form method="GET">
+            <label>Select Date: </label>
+            <input type="date" name="date" value="{date}" max="{datetime.utcnow().strftime('%Y-%m-%d')}">
+            <button type="submit">Test</button>
+        </form>
+        <h3>Results for {date}</h3>
+        <p>Total Trades: {total_trades}</p>
+        {'No trades found for this date.' if total_trades == 0 else ''}
+        <table border='1'>
+            <tr>
+                <th>Ticker</th>
+                <th>Type</th>
+                <th>Strike</th>
+                <th>Price</th>
+                <th>Total Size</th>
+                <th>Expiry</th>
+                <th>Start Time</th>
+                <th>Total Premium</th>
+                <th>Alert Rule</th>
+            </tr>
+    """
+    for trade in trades:
+        start_time = datetime.fromtimestamp(trade['start_time'] / 1000).strftime('%Y-%m-%d %H:%M:%S')
+        html += f"""
+        <tr>
+            <td>{trade['ticker'] or 'N/A'}</td>
+            <td>{trade['type'] or 'N/A'}</td>
+            <td>{trade['strike'] or 'N/A'}</td>
+            <td>{trade['price'] or 'N/A'}</td>
+            <td>{trade['total_size'] or 'N/A'}</td>
+            <td>{trade['expiry'] or 'N/A'}</td>
+            <td>{start_time}</td>
+            <td>{trade['total_premium'] or 'N/A'}</td>
+            <td>{trade['alert_rule'] or 'N/A'}</td>
+        </tr>
+        """
+    html += """
+        </table>
+    </div>
+    """
     return render_template_string(html)
 
 if __name__ == "__main__":
