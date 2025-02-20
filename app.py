@@ -410,9 +410,9 @@ def seasonality_etf_market():
         """
     html += """
         </div>
-        {'<p style="color: red;">Error: ' + str(error) if error else ''}</p>
-        {'<p>No data available for ticker ' + ticker + '</p>' if not error and not data else ''}
-        <table border='1' {'style="display: none;"' if not data else ''} id="etfMarketTable">
+        {% if error %}<p style="color: red;">Error: {{ error }}</p>{% endif %}
+        {% if not error and not data %}<p>No data available for ticker {{ ticker }}</p>{% endif %}
+        <table border='1' {% if not data %}style="display: none;"{% endif %} id="etfMarketTable">
             <tr>
                 <th><a href="#" onclick="sortTable('ticker')">Ticker</a></th>
                 <th><a href="#" onclick="sortTable('month')">Month</a></th>
