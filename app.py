@@ -1,6 +1,7 @@
-from flask import Flask, render_template_string
+from flask import Flask, render_template_string, request
 import requests
 import json
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 
@@ -10,7 +11,7 @@ API_URL = "https://api.unusualwhales.com/api/option-trades/flow-alerts"
 
 def get_option_flow():
     headers = {"Authorization": f"Bearer {APIKEY}"}
-    params = {"limit": 100}
+    params = {"limit": 1000}  # Max limit to get more data
     try:
         response = requests.get(API_URL, headers=headers, params=params)
         response.raise_for_status()
@@ -26,6 +27,14 @@ def get_option_flow():
 @app.route('/')
 def display_trades():
     try:
+        # Get days from query parameter (default to 1 day)
+        days = int(request.args.get('days', 1))
+        if days not in [1, 2, 3]:
+            days = 1  # Fallback to 1 day if invalid
+
+        # Calculate timestamp for filtering (milliseconds)
+        cutoff_time = int((datetime.utcnow() - timedelta(days=days)).timestamp() * 1000)
+
         data = get_option_flow()
         if "error" in data:
             html = f"""
@@ -33,13 +42,27 @@ def display_trades():
             <p>{data['error']}</p>
             """
         else:
-            # Extract the 'data' list from the response
+            # Extract trades
             parsed_data = data["json"]
             trades = parsed_data.get("data", []) if isinstance(parsed_data, dict) else parsed_data
-            # Filter trades with total_size = 1001
-            filtered_trades = [trade for trade in trades if trade.get("total_size") == 1001]
+            total_trades = len(trades)
+
+            # Filter trades by time (start_time > cutoff) and size = 1001
+            filtered_trades = [
+                trade for trade in trades
+                if trade.get("total_size") == 1001 and trade.get("start_time", 0) >= cutoff_time
+            ]
+
+            # GUI buttons
+            button_html = """
+            <form method="GET">
+                <button type="submit" name="days" value="1">1D</button>
+                <button type="submit" name="days" value="2">2D</button>
+                <button type="submit" name="days" value="3">3D</button>
+            </form>
+            """
+
             if filtered_trades:
-                # Build a cleaner table with specific fields
                 table_html = """
                 <table border='1'>
                     <tr>
@@ -49,9 +72,11 @@ def display_trades():
                         <th>Price</th>
                         <th>Total Size</th>
                         <th>Expiry</th>
+                        <th>Start Time</th>
                     </tr>
                 """
                 for trade in filtered_trades:
+                    start_time = datetime.fromtimestamp(trade.get("start_time", 0) / 1000).strftime('%Y-%m-%d %H:%M:%S')
                     table_html += f"""
                     <tr>
                         <td>{trade.get('ticker', 'N/A')}</td>
@@ -60,19 +85,24 @@ def display_trades():
                         <td>{trade.get('price', 'N/A')}</td>
                         <td>{trade.get('total_size', 'N/A')}</td>
                         <td>{trade.get('expiry', 'N/A')}</td>
+                        <td>{start_time}</td>
                     </tr>
                     """
                 table_html += "</table>"
                 html = f"""
                 <h1>Unusual Whales Option Flow Alerts</h1>
-                <p>Found {len(filtered_trades)} trades with size = 1001:</p>
+                {button_html}
+                <p>Total trades pulled: {total_trades}</p>
+                <p>Found {len(filtered_trades)} trades with size = 1001 in the last {days} day(s):</p>
                 {table_html}
                 <p>Raw Response (for debugging): {data['text']}</p>
                 """
             else:
                 html = f"""
                 <h1>Unusual Whales Option Flow Alerts</h1>
-                <p>No trades with size = 1001 found in the latest data.</p>
+                {button_html}
+                <p>Total trades pulled: {total_trades}</p>
+                <p>No trades with size = 1001 found in the last {days} day(s).</p>
                 <p>Raw Response (for debugging): {data['text']}</p>
                 """
         return render_template_string(html)
