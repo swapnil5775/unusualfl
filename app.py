@@ -382,6 +382,9 @@ def seasonality_etf_market():
     data = None
     error = None
 
+    # List of ETF tickers for buttons
+    etf_tickers = ['SPY', 'QQQ', 'IWM', 'XLE', 'XLC', 'XLK', 'XLV', 'XLP', 'XLY', 'XLRE', 'XLF', 'XLI', 'XLB']
+
     if ticker == 'ALL':
         response = get_api_data(SEASONALITY_MARKET_API_URL)
         if "error" in response:
@@ -396,9 +399,6 @@ def seasonality_etf_market():
             error = response["error"]
         else:
             data = response.get("data", [])
-
-    # List of ETF tickers for buttons
-    etf_tickers = ['SPY', 'QQQ', 'IWM', 'XLE', 'XLC', 'XLK', 'XLV', 'XLP', 'XLY', 'XLRE', 'XLF', 'XLI', 'XLB']
 
     html = f"""
     <h1>Seasonality - ETF Market</h1>
