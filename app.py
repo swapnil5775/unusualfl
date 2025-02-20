@@ -506,27 +506,49 @@ def stock_perf_monthly():
             <p>No monthly performance data found for {ticker}.</p>
             """
         else:
+            # Table with all fields from the API response
             table_html = """
-            <table border='1'>
-                <tr><th>Month</th><th>Average Return</th><th>Win Rate</th></tr>
+            <table border='1' style="width: 100%; border-collapse: collapse;">
+                <tr style="background-color: #f2f2f2;">
+                    <th>Month</th>
+                    <th>Avg Change</th>
+                    <th>Max Change</th>
+                    <th>Median Change</th>
+                    <th>Min Change</th>
+                    <th>Positive Closes</th>
+                    <th>Positive Months %</th>
+                    <th>Years</th>
+                </tr>
             """
+            month_names = {
+                1: "January", 2: "February", 3: "March", 4: "April", 5: "May", 6: "June",
+                7: "July", 8: "August", 9: "September", 10: "October", 11: "November", 12: "December"
+            }
             for entry in monthly_data:
+                month_num = entry.get('month', 0)
+                month_name = month_names.get(month_num, f"Month {month_num}")
                 table_html += f"""
                 <tr>
-                    <td>{entry.get('month', 'N/A')}</td>
-                    <td>{entry.get('average_return', 'N/A')}</td>
-                    <td>{entry.get('win_rate', 'N/A')}</td>
+                    <td>{month_name}</td>
+                    <td>{entry.get('avg_change', 'N/A'):.4f}</td>
+                    <td>{entry.get('max_change', 'N/A'):.4f}</td>
+                    <td>{entry.get('median_change', 'N/A'):.4f}</td>
+                    <td>{entry.get('min_change', 'N/A'):.4f}</td>
+                    <td>{entry.get('positive_closes', 'N/A')}</td>
+                    <td>{entry.get('positive_months_perc', 'N/A'):.2%}</td>
+                    <td>{entry.get('years', 'N/A')}</td>
                 </tr>
                 """
             table_html += "</table>"
 
+            # Line chart for avg_change over months
             chart_data = json.dumps({
-                "months": [entry.get("month", "N/A") for entry in monthly_data],
-                "returns": [float(entry.get("average_return", 0) or 0) for entry in monthly_data]
+                "months": [month_names.get(entry.get("month", 0), f"Month {entry.get('month', 0)}") for entry in monthly_data],
+                "avg_changes": [float(entry.get("avg_change", 0) or 0) for entry in monthly_data]
             })
             chart_html = f"""
             <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-            <canvas id="perfChart" width="600" height="300"></canvas>
+            <canvas id="perfChart" width="800" height="400" style="margin-top: 20px;"></canvas>
             <script>
                 const perfData = {chart_data};
                 const ctx = document.getElementById('perfChart').getContext('2d');
@@ -535,16 +557,27 @@ def stock_perf_monthly():
                     data: {{
                         labels: perfData.months,
                         datasets: [{{
-                            label: 'Average Return ({ticker})',
-                            data: perfData.returns,
+                            label: 'Average Change ({ticker})',
+                            data: perfData.avg_changes,
                             borderColor: 'rgba(75, 192, 192, 1)',
-                            fill: false
+                            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                            fill: false,
+                            tension: 0.1
                         }}]
                     }},
                     options: {{
+                        responsive: true,
                         scales: {{
                             x: {{ title: {{ display: true, text: 'Month' }} }},
-                            y: {{ title: {{ display: true, text: 'Average Return' }}, beginAtZero: true }}
+                            y: {{ 
+                                title: {{ display: true, text: 'Average Change' }}, 
+                                beginAtZero: false,
+                                ticks: {{ callback: function(value) {{ return value.toFixed(4); }} }}
+                            }}
+                        }},
+                        plugins: {{
+                            legend: {{ display: true, position: 'top' }},
+                            tooltip: {{ callbacks: {{ label: function(context) {{ return context.parsed.y.toFixed(4); }} }} }}
                         }}
                     }}
                 }});
@@ -556,8 +589,10 @@ def stock_perf_monthly():
             {MENU_BAR}
             {sub_menu}
             {form_html}
-            {table_html}
-            {chart_html}
+            <div style="margin-top: 20px;">
+                {table_html}
+                {chart_html}
+            </div>
             """
     return render_template_string(html)
 
