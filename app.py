@@ -14,7 +14,6 @@ def get_option_flow():
     try:
         response = requests.get(API_URL, headers=headers, params=params)
         response.raise_for_status()
-        # Return raw text and attempt to parse JSON
         raw_text = response.text
         try:
             parsed_data = response.json()
@@ -34,39 +33,47 @@ def display_trades():
             <p>{data['error']}</p>
             """
         else:
-            # Debug: Show raw response
-            raw_response = data["text"]
+            # Extract the 'data' list from the response
             parsed_data = data["json"]
-            # Check if parsed_data is a list or dict we can filter
-            if isinstance(parsed_data, (list, dict)):
-                if isinstance(parsed_data, dict):
-                    # If it's a dict, see if it contains a list of trades
-                    trades = parsed_data.get("trades", parsed_data.get("data", []))
-                else:
-                    trades = parsed_data
-                filtered_trades = [trade for trade in trades if trade.get("size") == 1001]
-                if filtered_trades:
-                    table_html = "<table border='1'><tr><th>Trade Details</th></tr>"
-                    for trade in filtered_trades:
-                        table_html += f"<tr><td>{trade}</td></tr>"
-                    table_html += "</table>"
-                    html = f"""
-                    <h1>Unusual Whales Option Flow Alerts</h1>
-                    <p>Found {len(filtered_trades)} trades with size = 1001:</p>
-                    {table_html}
-                    <p>Raw Response (for debugging): {raw_response}</p>
+            trades = parsed_data.get("data", []) if isinstance(parsed_data, dict) else parsed_data
+            # Filter trades with total_size = 1001
+            filtered_trades = [trade for trade in trades if trade.get("total_size") == 1001]
+            if filtered_trades:
+                # Build a cleaner table with specific fields
+                table_html = """
+                <table border='1'>
+                    <tr>
+                        <th>Ticker</th>
+                        <th>Type</th>
+                        <th>Strike</th>
+                        <th>Price</th>
+                        <th>Total Size</th>
+                        <th>Expiry</th>
+                    </tr>
+                """
+                for trade in filtered_trades:
+                    table_html += f"""
+                    <tr>
+                        <td>{trade.get('ticker', 'N/A')}</td>
+                        <td>{trade.get('type', 'N/A')}</td>
+                        <td>{trade.get('strike', 'N/A')}</td>
+                        <td>{trade.get('price', 'N/A')}</td>
+                        <td>{trade.get('total_size', 'N/A')}</td>
+                        <td>{trade.get('expiry', 'N/A')}</td>
+                    </tr>
                     """
-                else:
-                    html = f"""
-                    <h1>Unusual Whales Option Flow Alerts</h1>
-                    <p>No trades with size = 1001 found in the latest data.</p>
-                    <p>Raw Response (for debugging): {raw_response}</p>
-                    """
+                table_html += "</table>"
+                html = f"""
+                <h1>Unusual Whales Option Flow Alerts</h1>
+                <p>Found {len(filtered_trades)} trades with size = 1001:</p>
+                {table_html}
+                <p>Raw Response (for debugging): {data['text']}</p>
+                """
             else:
                 html = f"""
                 <h1>Unusual Whales Option Flow Alerts</h1>
-                <p>Unexpected data format: {type(parsed_data).__name__}</p>
-                <p>Raw Response: {raw_response}</p>
+                <p>No trades with size = 1001 found in the latest data.</p>
+                <p>Raw Response (for debugging): {data['text']}</p>
                 """
         return render_template_string(html)
     except Exception as e:
