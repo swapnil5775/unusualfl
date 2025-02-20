@@ -10,6 +10,7 @@ APIKEY = "bd0cf36c-5072-4b1e-87ee-7e278b8a02e5"
 FLOW_API_URL = "https://api.unusualwhales.com/api/option-trades/flow-alerts"
 INST_LIST_API_URL = "https://api.unusualwhales.com/api/institutions"
 INST_HOLDINGS_API_URL = "https://api.unusualwhales.com/api/institution/{name}/holdings"
+MARKET_TIDE_API_URL = "https://api.unusualwhales.com/api/v1/market-tide"
 
 def get_api_data(url, params=None):
     headers = {"Authorization": f"Bearer {APIKEY}"}
@@ -27,6 +28,7 @@ MENU_BAR = """
     <a href="/optionflow" style="margin-right: 20px;">Option Flow</a>
     <a href="/institution/list" style="margin-right: 20px;">Institution List</a>
     <a href="/research" style="margin-right: 20px;">Research</a>
+    <a href="/market-tide" style="margin-right: 20px;">Market Tide</a>
 </div>
 """
 
@@ -148,7 +150,6 @@ def institution_list():
 # Research Page
 @app.route('/research')
 def research():
-    # Fetch institution list
     inst_data = get_api_data(INST_LIST_API_URL)
     if "error" in inst_data:
         html = f"""
@@ -158,10 +159,9 @@ def research():
         """
         return render_template_string(html)
 
-    institutions = inst_data.get("data", [])[:5]  # Limit to 5 for demo; remove slice for full list
+    institutions = inst_data.get("data", [])[:5]  # Limit to 5 for demo
     holdings_master = {}
 
-    # Aggregate holdings from all institutions
     for inst in institutions:
         name = inst if isinstance(inst, str) else inst.get('name', 'N/A')
         holdings_data = get_api_data(INST_HOLDINGS_API_URL.format(name=name))
@@ -175,7 +175,6 @@ def research():
                         holdings_master[ticker] = {}
                     holdings_master[ticker][name] = units
 
-    # Master table
     table_html = """
     <table border='1' id="masterTable">
         <tr><th>Ticker</th><th>Total Units</th></tr>
@@ -187,7 +186,6 @@ def research():
         ticker_options += f"<option value='{ticker}'>{ticker}</option>"
     table_html += "</table>"
 
-    # Chart.js setup
     chart_html = f"""
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <select id="tickerSelect" onchange="updateChart()">
@@ -239,6 +237,82 @@ def research():
     <h2>Holdings by Institution</h2>
     {chart_html}
     """
+    return render_template_string(html)
+
+# Market Tide Page
+@app.route('/market-tide', methods=['GET'])
+def market_tide():
+    ticker = request.args.get('ticker', 'SPY')  # Default ticker
+    date_from = request.args.get('date_from', '2022-09-28')  # Earliest data
+    date_to = request.args.get('date_to', datetime.utcnow().strftime('%Y-%m-%d'))
+
+    params = {"ticker": ticker, "date_from": date_from, "date_to": date_to}
+    data = get_api_data(MARKET_TIDE_API_URL, params=params)
+
+    form_html = f"""
+    <form method="GET" style="margin-top: 10px;">
+        <label>Ticker: </label><input type="text" name="ticker" value="{ticker}" placeholder="Enter ticker symbol">
+        <label>From: </label><input type="date" name="date_from" value="{date_from}" min="2022-09-28" max="{datetime.utcnow().strftime('%Y-%m-%d')}">
+        <label>To: </label><input type="date" name="date_to" value="{date_to}" min="2022-09-28" max="{datetime.utcnow().strftime('%Y-%m-%d')}">
+        <button type="submit">Go</button>
+    </form>
+    """
+
+    if "error" in data:
+        html = f"""
+        <h1>Market Tide</h1>
+        {MENU_BAR}
+        {form_html}
+        <p>{data['error']}</p>
+        """
+    else:
+        tide_data = data.get("data", [])
+        if not tide_data:
+            html = f"""
+            <h1>Market Tide</h1>
+            {MENU_BAR}
+            {form_html}
+            <p>No data found for {ticker} between {date_from} and {date_to}.</p>
+            """
+        else:
+            # Assuming data format: {"data": [{"date": "YYYY-MM-DD", "value": float}, ...]}
+            dates = [entry.get("date", "N/A") for entry in tide_data]
+            values = [float(entry.get("value", 0) or 0) for entry in tide_data]
+            chart_data = json.dumps({"dates": dates, "values": values})
+
+            chart_html = f"""
+            <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+            <canvas id="tideChart" width="600" height="300"></canvas>
+            <script>
+                const tideData = {chart_data};
+                const ctx = document.getElementById('tideChart').getContext('2d');
+                new Chart(ctx, {{
+                    type: 'line',
+                    data: {{
+                        labels: tideData.dates,
+                        datasets: [{{
+                            label: 'Market Tide Value',
+                            data: tideData.values,
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            fill: false
+                        }}]
+                    }},
+                    options: {{
+                        scales: {{
+                            x: {{ title: {{ display: true, text: 'Date' }} }},
+                            y: {{ title: {{ display: true, text: 'Value' }}, beginAtZero: true }}
+                        }}
+                    }}
+                }});
+            </script>
+            """
+
+            html = f"""
+            <h1>Market Tide ({ticker})</h1>
+            {MENU_BAR}
+            {form_html}
+            {chart_html}
+            """
     return render_template_string(html)
 
 if __name__ == "__main__":
