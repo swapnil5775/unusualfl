@@ -104,18 +104,25 @@ def get_institution_holdings():
 
 @app.route('/optionflow', methods=['GET'])
 def option_flow():
-    date = request.args.get('date', datetime.utcnow().strftime('%Y-%m-%d'))
+    date = request.args.get('date')  # No default date, only filter if provided
     sort_col = request.args.get('sort_col', 'start_time')
     sort_dir = request.args.get('sort_dir', 'desc')
     limit = int(request.args.get('limit', 100))
     offset = int(request.args.get('offset', 0))
 
     params = {"limit": limit, "offset": offset}
+    # Only add date parameters if a date is explicitly provided
+    if date:
+        try:
+            start_time = int(datetime.strptime(date, '%Y-%m-%d').timestamp() * 1000)
+            end_time = start_time + (24 * 60 * 60 * 1000) - 1  # End of day
+            params["start_time"] = start_time
+            params["end_time"] = end_time
+        except ValueError:
+            pass  # Ignore invalid dates, fetch all trades
+
     data = get_api_data(FLOW_API_URL, params=params)
     trades = data.get("data", []) if "error" not in data else []
-
-    # Filter by date (client-side approximation)
-    trades = [t for t in trades if datetime.fromtimestamp(t.get('start_time', 0)/1000).strftime('%Y-%m-%d') == date]
 
     # Sort trades
     sort_key = {'ticker': 'ticker', 'type': 'type', 'strike': 'strike', 'price': 'price',
@@ -126,11 +133,14 @@ def option_flow():
         return float(val) if isinstance(val, (int, float)) else str(val).lower()
     trades.sort(key=lambda x: get_sort_value(x, sort_col), reverse=(sort_dir == 'desc'))
 
+    # Get total count (assuming API provides this, otherwise estimate)
+    total_trades = data.get("total_count", len(trades) + (1 if len(trades) == limit else 0))
+
     html = f"""
     <h1>Option Flow Alerts</h1>
     {MENU_BAR}
     <div>
-        <input type="date" id="dateFilter" value="{date}" onchange="updateFilters()">
+        <input type="date" id="dateFilter" onchange="updateFilters()" value="{date or ''}">
         <button onclick="collectPastData()">Collect Last 15 Days</button>
         <div id="progress" style="display:none">
             <progress id="progressBar" value="0" max="15"></progress>
@@ -163,31 +173,48 @@ def option_flow():
         """
     html += f"""
     </table>
+    <div>
+        <p>Showing {len(trades)} of {total_trades} trades</p>
+    """
+    if offset > 0:
+        prev_url = f"/optionflow?sort_col={sort_col}&sort_dir={sort_dir}&limit={limit}&offset={max(0, offset-limit)}"
+        if date:
+            prev_url += f"&date={date}"
+        html += f"<a href='{prev_url}'>Previous</a>&nbsp;"
+    if offset + limit < total_trades:
+        next_url = f"/optionflow?sort_col={sort_col}&sort_dir={sort_dir}&limit={limit}&offset={offset+limit}"
+        if date:
+            next_url += f"&date={date}"
+        html += f"<a href='{next_url}'>Next</a>"
+    html += """
+    </div>
     <script>
-        let currentSort = {{col: '{sort_col}', dir: '{sort_dir}'}};
-        function updateFilters() {{
+        let currentSort = {col: '{sort_col}', dir: '{sort_dir}'};
+        function updateFilters() {
             const date = document.getElementById('dateFilter').value;
-            window.location.href = `/optionflow?date=${{date}}&sort_col=${{currentSort.col}}&sort_dir=${{currentSort.dir}}`;
-        }}
-        function sortTable(col) {{
+            let url = `/optionflow?sort_col=${currentSort.col}&sort_dir=${currentSort.dir}`;
+            if (date) url += `&date=${date}`;
+            window.location.href = url;
+        }
+        function sortTable(col) {
             const newDir = currentSort.col === col && currentSort.dir === 'desc' ? 'asc' : 'desc';
-            currentSort = {{col: col, dir: newDir}};
+            currentSort = {col: col, dir: newDir};
             updateFilters();
-        }}
-        function collectPastData() {{
+        }
+        function collectPastData() {
             document.getElementById('progress').style.display = 'block';
-            fetch('/collect_past_data', {{method: 'POST'}})
+            fetch('/collect_past_data', {method: 'POST'})
                 .then(response => response.json())
-                .then(data => {{
-                    document.getElementById('progressBar').value = 1;
+                .then(data => {
+                    document.getElementById('progressBar').value = 15;
                     document.getElementById('progressMsg').textContent = 'Processed: ' + data.trades + ' trades';
                     setTimeout(() => document.getElementById('progress').style.display = 'none', 2000);
-                }})
-                .catch(error => {{
+                })
+                .catch(error => {
                     document.getElementById('progressMsg').textContent = 'Error collecting data';
                     console.error('Error:', error);
-                }});
-        }}
+                });
+        }
     </script>
     """
     return render_template_string(html)
