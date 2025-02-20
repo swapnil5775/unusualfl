@@ -252,10 +252,10 @@ def seasonality_per_ticker():
         <table border='1' {'style="display: none;"' if not data else ''} id="seasonalityTable">
             <tr>
                 <th>Month</th>
-                <th>Avg Change</th>
-                <th>Max Change</th>
-                <th>Median Change</th>
-                <th>Min Change</th>
+                <th>Avg Change (%)</th>
+                <th>Max Change (%)</th>
+                <th>Median Change (%)</th>
+                <th>Min Change (%)</th>
                 <th>Positive Closes</th>
                 <th>Positive Months %</th>
                 <th>Years</th>
@@ -263,15 +263,27 @@ def seasonality_per_ticker():
     """
     if data:
         for item in data:
+            # Convert changes to percentages and handle negative numbers with red color
+            avg_change = item['avg_change'] * 100
+            max_change = item['max_change'] * 100
+            median_change = item['median_change'] * 100
+            min_change = item['min_change'] * 100
+            positive_months_perc = item['positive_months_perc'] * 100  # Already a percentage, but ensure format
+
+            # Format for display with red color for negative values
+            def format_with_color(value, decimals=2):
+                color = 'red' if value < 0 else 'black'
+                return f'<span style="color: {color}">{value:.{decimals}f}%</span>'
+
             html += f"""
             <tr>
                 <td>{item['month']}</td>
-                <td>{item['avg_change']:.4f}</td>
-                <td>{item['max_change']:.4f}</td>
-                <td>{item['median_change']:.4f}</td>
-                <td>{item['min_change']:.4f}</td>
+                <td>{format_with_color(avg_change)}</td>
+                <td>{format_with_color(max_change)}</td>
+                <td>{format_with_color(median_change)}</td>
+                <td>{format_with_color(min_change)}</td>
                 <td>{item['positive_closes']}</td>
-                <td>{item['positive_months_perc']:.4f}</td>
+                <td>{positive_months_perc:.2f}%</td>
                 <td>{item['years']}</td>
             </tr>
             """
