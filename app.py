@@ -3,6 +3,8 @@ from flask import Flask, render_template_string, request, jsonify
 import requests
 import json
 from datetime import datetime, timedelta
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
 app = Flask(__name__)
 
@@ -12,6 +14,36 @@ FLOW_API_URL = "https://api.unusualwhales.com/api/option-trades/flow-alerts"
 INST_LIST_API_URL = "https://api.unusualwhales.com/api/institutions"
 INST_HOLDINGS_API_URL = "https://api.unusualwhales.com/api/institution/{name}/holdings"
 MARKET_TIDE_API_URL = "https://api.unusualwhales.com/api/v1/market-tide"
+
+# Database connection
+def get_db_connection():
+    conn = psycopg2.connect(os.environ["POSTGRES_URL"], cursor_factory=RealDictCursor)
+    return conn
+
+# Initialize database table
+def init_db():
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS trades (
+            id SERIAL PRIMARY KEY,
+            ticker TEXT,
+            type TEXT,
+            strike REAL,
+            price REAL,
+            total_size INTEGER,
+            expiry TEXT,
+            start_time BIGINT,
+            total_premium REAL,
+            alert_rule TEXT,
+            trade_date DATE
+        )
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
+
+init_db()  # Run on startup
 
 def get_api_data(url, params=None):
     headers = {"Authorization": f"Bearer {APIKEY}"}
@@ -104,89 +136,116 @@ def get_institution_holdings():
 
 @app.route('/optionflow', methods=['GET'])
 def option_flow():
-    date = request.args.get('date')  # No default date, only filter if provided
+    date = request.args.get('date')
     sort_col = request.args.get('sort_col', 'start_time')
     sort_dir = request.args.get('sort_dir', 'desc')
     limit = int(request.args.get('limit', 100))
     offset = int(request.args.get('offset', 0))
 
-    params = {"limit": limit, "offset": offset}
-    # Only add date parameters if a date is explicitly provided
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    # Fetch trades from DB
+    query = "SELECT * FROM trades"
+    params = []
     if date:
-        try:
-            start_time = int(datetime.strptime(date, '%Y-%m-%d').timestamp() * 1000)
-            end_time = start_time + (24 * 60 * 60 * 1000) - 1  # End of day
-            params["start_time"] = start_time
-            params["end_time"] = end_time
-        except ValueError:
-            pass  # Ignore invalid dates, fetch all trades
+        query += " WHERE trade_date = %s"
+        params.append(date)
+    query += f" ORDER BY {sort_col} {sort_dir} LIMIT %s OFFSET %s"
+    params.extend([limit, offset])
+    cur.execute(query, params)
+    trades = cur.fetchall()
 
-    data = get_api_data(FLOW_API_URL, params=params)
-    trades = data.get("data", []) if "error" not in data else []
+    # Total trades
+    cur.execute("SELECT COUNT(*) FROM trades" + (" WHERE trade_date = %s" if date else ""), ([date] if date else []))
+    total_trades = cur.fetchone()['count']
 
-    # Sort trades
-    sort_key = {'ticker': 'ticker', 'type': 'type', 'strike': 'strike', 'price': 'price',
-                'total_size': 'total_size', 'expiry': 'expiry', 'start_time': 'start_time',
-                'total_premium': 'total_premium', 'alert_rule': 'alert_rule'}
-    def get_sort_value(trade, key):
-        val = trade.get(sort_key[key], '')
-        return float(val) if isinstance(val, (int, float)) else str(val).lower()
-    trades.sort(key=lambda x: get_sort_value(x, sort_col), reverse=(sort_dir == 'desc'))
+    # Last 5 days stats
+    cur.execute("""
+        SELECT trade_date, COUNT(*) as trade_count, SUM(total_premium) as total_premium
+        FROM trades
+        WHERE trade_date >= %s
+        GROUP BY trade_date
+        ORDER BY trade_date DESC
+        LIMIT 5
+    """, [datetime.utcnow().date() - timedelta(days=4)])
+    daily_stats = cur.fetchall()
 
-    # Get total count (assuming API provides this, otherwise estimate)
-    total_trades = data.get("total_count", len(trades) + (1 if len(trades) == limit else 0))
+    cur.close()
+    conn.close()
 
     html = f"""
     <h1>Option Flow Alerts</h1>
     {MENU_BAR}
-    <div>
-        <input type="date" id="dateFilter" onchange="updateFilters()" value="{date or ''}">
-        <button onclick="collectPastData()">Collect Last 15 Days</button>
-        <div id="progress" style="display:none">
-            <progress id="progressBar" value="0" max="15"></progress>
-            <span id="progressMsg"></span>
-        </div>
-    </div>
-    <table border='1' id='flowTable'>
-        <tr>
-            <th><a href="#" onclick="sortTable('ticker')">Ticker</a></th>
-            <th><a href="#" onclick="sortTable('type')">Type</a></th>
-            <th><a href="#" onclick="sortTable('strike')">Strike</a></th>
-            <th><a href="#" onclick="sortTable('price')">Price</a></th>
-            <th><a href="#" onclick="sortTable('total_size')">Total Size</a></th>
-            <th><a href="#" onclick="sortTable('expiry')">Expiry</a></th>
-            <th><a href="#" onclick="sortTable('start_time')">Start Time</a></th>
-            <th><a href="#" onclick="sortTable('total_premium')">Total Premium</a></th>
-            <th><a href="#" onclick="sortTable('alert_rule')">Alert Rule</a></th>
-        </tr>
+    <div style="display: flex;">
+        <div style="flex: 3;">
+            <input type="date" id="dateFilter" onchange="updateFilters()" value="{date or ''}">
+            <button onclick="collectPastData()">Collect Last 15 Days</button>
+            <div id="progress" style="display:none">
+                <progress id="progressBar" value="0" max="15"></progress>
+                <span id="progressMsg"></span>
+            </div>
+            <table border='1' id='flowTable'>
+                <tr>
+                    <th><a href="#" onclick="sortTable('ticker')">Ticker</a></th>
+                    <th><a href="#" onclick="sortTable('type')">Type</a></th>
+                    <th><a href="#" onclick="sortTable('strike')">Strike</a></th>
+                    <th><a href="#" onclick="sortTable('price')">Price</a></th>
+                    <th><a href="#" onclick="sortTable('total_size')">Total Size</a></th>
+                    <th><a href="#" onclick="sortTable('expiry')">Expiry</a></th>
+                    <th><a href="#" onclick="sortTable('start_time')">Start Time</a></th>
+                    <th><a href="#" onclick="sortTable('total_premium')">Total Premium</a></th>
+                    <th><a href="#" onclick="sortTable('alert_rule')">Alert Rule</a></th>
+                </tr>
     """
     for trade in trades:
-        start_time = datetime.fromtimestamp(trade.get('start_time', 0)/1000).strftime('%Y-%m-%d %H:%M:%S')
+        start_time = datetime.fromtimestamp(trade['start_time'] / 1000).strftime('%Y-%m-%d %H:%M:%S')
         html += f"""
         <tr>
-            <td>{trade.get('ticker', 'N/A')}</td><td>{trade.get('type', 'N/A')}</td>
-            <td>{trade.get('strike', 'N/A')}</td><td>{trade.get('price', 'N/A')}</td>
-            <td>{trade.get('total_size', 'N/A')}</td><td>{trade.get('expiry', 'N/A')}</td>
-            <td>{start_time}</td><td>{trade.get('total_premium', 'N/A')}</td>
-            <td>{trade.get('alert_rule', 'N/A')}</td>
+            <td>{trade['ticker'] or 'N/A'}</td><td>{trade['type'] or 'N/A'}</td>
+            <td>{trade['strike'] or 'N/A'}</td><td>{trade['price'] or 'N/A'}</td>
+            <td>{trade['total_size'] or 'N/A'}</td><td>{trade['expiry'] or 'N/A'}</td>
+            <td>{start_time}</td><td>{trade['total_premium'] or 'N/A'}</td>
+            <td>{trade['alert_rule'] or 'N/A'}</td>
         </tr>
         """
     html += f"""
-    </table>
-    <div>
-        <p>Showing {len(trades)} of {total_trades} trades</p>
+            </table>
+            <div>
+                <p>Showing {len(trades)} of {total_trades} trades</p>
     """
     if offset > 0:
         prev_url = f"/optionflow?sort_col={sort_col}&sort_dir={sort_dir}&limit={limit}&offset={max(0, offset-limit)}"
         if date:
             prev_url += f"&date={date}"
-        html += f"<a href='{prev_url}'>Previous</a>&nbsp;"
+        html += f"<a href='{prev_url}'>Previous</a> "
     if offset + limit < total_trades:
         next_url = f"/optionflow?sort_col={sort_col}&sort_dir={sort_dir}&limit={limit}&offset={offset+limit}"
         if date:
             next_url += f"&date={date}"
         html += f"<a href='{next_url}'>Next</a>"
     html += """
+            </div>
+        </div>
+        <div style="flex: 1; margin-left: 20px;">
+            <h3>Last 5 Days Stats</h3>
+            <table border='1'>
+                <tr><th>Date</th><th>Trades</th><th>Total Premium</th></tr>
+    """
+    for stat in daily_stats:
+        premium = stat['total_premium'] or 0
+        if premium >= 2000000:
+            premium_str = f"${round(premium / 1000000)}M"
+        elif premium >= 1000000:
+            premium_str = f"${round(premium / 1000000, 1)}M"
+        elif premium >= 100000:
+            premium_str = f"${round(premium / 100000)}00K"
+        else:
+            premium_str = f"${round(premium / 10000)}0K"
+        html += f"<tr><td>{stat['trade_date']}</td><td>{stat['trade_count']}</td><td>{premium_str}</td></tr>"
+    html += """
+            </table>
+        </div>
     </div>
     <script>
         let currentSort = {col: '{sort_col}', dir: '{sort_dir}'};
@@ -208,7 +267,10 @@ def option_flow():
                 .then(data => {
                     document.getElementById('progressBar').value = 15;
                     document.getElementById('progressMsg').textContent = 'Processed: ' + data.trades + ' trades';
-                    setTimeout(() => document.getElementById('progress').style.display = 'none', 2000);
+                    setTimeout(() => {
+                        document.getElementById('progress').style.display = 'none';
+                        window.location.reload();
+                    }, 2000);
                 })
                 .catch(error => {
                     document.getElementById('progressMsg').textContent = 'Error collecting data';
@@ -221,11 +283,44 @@ def option_flow():
 
 @app.route('/collect_past_data', methods=['POST'])
 def collect_past_data():
-    date = datetime.utcnow().strftime('%Y-%m-%d')
-    params = {"limit": 500, "offset": 0}
-    data = get_api_data(FLOW_API_URL, params=params)
-    trades = data.get("data", []) if "error" not in data else []
-    return jsonify({"trades": len(trades)})
+    all_trades = []
+    limit = 500
+    offset = 0
+    end_date = datetime.utcnow()
+    start_date = end_date - timedelta(days=15)
+    start_time = int(start_date.timestamp() * 1000)
+    end_time = int(end_date.timestamp() * 1000)
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    while True:
+        params = {"limit": limit, "offset": offset, "start_time": start_time, "end_time": end_time}
+        data = get_api_data(FLOW_API_URL, params=params)
+        trades = data.get("data", []) if "error" not in data else []
+        if not trades:
+            break
+        
+        for trade in trades:
+            trade_date = datetime.fromtimestamp(trade.get('start_time', 0) / 1000).date()
+            cur.execute("""
+                INSERT INTO trades (ticker, type, strike, price, total_size, expiry, start_time, total_premium, alert_rule, trade_date)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT DO NOTHING
+            """, (
+                trade.get('ticker'), trade.get('type'), trade.get('strike'), trade.get('price'),
+                trade.get('total_size'), trade.get('expiry'), trade.get('start_time'),
+                trade.get('total_premium'), trade.get('alert_rule'), trade_date
+            ))
+        all_trades.extend(trades)
+        offset += limit
+        if len(trades) < limit:
+            break
+
+    conn.commit()
+    cur.close()
+    conn.close()
+    return jsonify({"trades": len(all_trades), "message": f"Collected and stored {len(all_trades)} trades"})
 
 @app.route('/research')
 def research():
