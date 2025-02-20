@@ -10,6 +10,7 @@ APIKEY = "bd0cf36c-5072-4b1e-87ee-7e278b8a02e5"
 INST_LIST_API_URL = "https://api.unusualwhales.com/api/institutions"
 INST_HOLDINGS_API_URL = "https://api.unusualwhales.com/api/institution/{name}/holdings"
 SEASONALITY_API_URL = "https://api.unusualwhales.com/api/seasonality/{ticker}/monthly"
+SEASONALITY_MARKET_API_URL = "https://api.unusualwhales.com/api/seasonality/market"
 
 def get_api_data(url, params=None):
     headers = {"Authorization": f"Bearer {APIKEY}"}
@@ -220,6 +221,7 @@ def seasonality():
     <p>Select a sub-page or ticker to view seasonality data.</p>
     <ul>
         <li><a href="/seasonality/per-ticker">Per Ticker</a></li>
+        <li><a href="/seasonality/etf-market">ETF Market</a></li>
     </ul>
     """
     return render_template_string(html)
@@ -267,14 +269,14 @@ def seasonality_per_ticker():
         <h2>Monthly Seasonality Statistics</h2>
         <table border='1' {'style="display: none;"' if not monthly_data else ''} id="monthlySeasonalityTable">
             <tr>
-                <th>Month</th>
-                <th>Avg Change</th>
-                <th>Max Change</th>
-                <th>Median Change</th>
-                <th>Min Change</th>
-                <th>Positive Closes</th>
-                <th>Positive Months %</th>
-                <th>Years</th>
+                <th><a href="#" onclick="sortTable('month', 'monthly')">Month</a></th>
+                <th><a href="#" onclick="sortTable('avg_change', 'monthly')">Avg Change</a></th>
+                <th><a href="#" onclick="sortTable('max_change', 'monthly')">Max Change</a></th>
+                <th><a href="#" onclick="sortTable('median_change', 'monthly')">Median Change</a></th>
+                <th><a href="#" onclick="sortTable('min_change', 'monthly')">Min Change</a></th>
+                <th><a href="#" onclick="sortTable('positive_closes', 'monthly')">Positive Closes</a></th>
+                <th><a href="#" onclick="sortTable('positive_months_perc', 'monthly')">Positive Months %</a></th>
+                <th><a href="#" onclick="sortTable('years', 'monthly')">Years</a></th>
             </tr>
     """
     if monthly_data:
@@ -306,15 +308,15 @@ def seasonality_per_ticker():
     html += """
         </table>
 
-        <!-- Second Table: 15-Year Monthly Return Details -->
+        <!-- Second Table: Year-Month Seasonality Data -->
         <h2>15-Year Monthly Return History</h2>
         <table border='1' {'style="display: none;"' if not yearly_monthly_data else ''} id="yearlyMonthlySeasonalityTable">
             <tr>
-                <th>Year</th>
-                <th>Month</th>
-                <th>Open</th>
-                <th>Close</th>
-                <th>Change</th>
+                <th><a href="#" onclick="sortTable('year', 'yearly')">Year</a></th>
+                <th><a href="#" onclick="sortTable('month', 'yearly')">Month</a></th>
+                <th><a href="#" onclick="sortTable('open', 'yearly')">Open</a></th>
+                <th><a href="#" onclick="sortTable('close', 'yearly')">Close</a></th>
+                <th><a href="#" onclick="sortTable('change', 'yearly')">Change</a></th>
             </tr>
     """
     if yearly_monthly_data:
@@ -342,14 +344,139 @@ def seasonality_per_ticker():
         </table>
     </div>
     <script>
-        // Show tables if data exists
-        const monthlyTable = document.getElementById('monthlySeasonalityTable');
-        if (monthlyTable.rows.length > 1) {
-            monthlyTable.style.display = 'table';
+        let sortStates = {
+            monthly: { col: 'month', dir: 'asc' },
+            yearly: { col: 'year', dir: 'asc' }
+        };
+
+        function sortTable(col, tableType) {
+            const current = sortStates[tableType];
+            const newDir = current.col === col && current.dir === 'asc' ? 'desc' : 'asc';
+            sortStates[tableType] = { col: col, dir: newDir };
+
+            let url = `/seasonality/per-ticker?ticker={ticker}`;
+            if (tableType === 'monthly') {
+                url += `&sort_col=${col}&sort_dir=${newDir}&table=monthly`;
+            } else {
+                url += `&sort_col=${col}&sort_dir=${newDir}&table=yearly`;
+            }
+            window.location.href = url;
         }
-        const yearlyMonthlyTable = document.getElementById('yearlyMonthlySeasonalityTable');
-        if (yearlyMonthlyTable.rows.length > 1) {
-            yearlyMonthlyTable.style.display = 'table';
+
+        // Apply sorting if query parameters exist
+        const urlParams = new URLSearchParams(window.location.search);
+        const sortCol = urlParams.get('sort_col');
+        const sortDir = urlParams.get('sort_dir');
+        const tableType = urlParams.get('table');
+        if (sortCol && sortDir && tableType) {
+            sortStates[tableType].col = sortCol;
+            sortStates[tableType].dir = sortDir;
+        }
+    </script>
+    """
+    return render_template_string(html)
+
+@app.route('/seasonality/etf-market', methods=['GET'])
+def seasonality_etf_market():
+    ticker = request.args.get('ticker', 'ALL').upper()  # Default to 'ALL', convert to uppercase
+    data = None
+    error = None
+
+    if ticker == 'ALL':
+        response = get_api_data(SEASONALITY_MARKET_API_URL)
+        if "error" in response:
+            error = response["error"]
+        else:
+            data = response.get("data", [])
+    else:
+        # Fetch data for a specific ticker
+        url = SEASONALITY_API_URL.format(ticker=ticker)
+        response = get_api_data(url)
+        if "error" in response:
+            error = response["error"]
+        else:
+            data = response.get("data", [])
+
+    # List of ETF tickers for buttons
+    etf_tickers = ['SPY', 'QQQ', 'IWM', 'XLE', 'XLC', 'XLK', 'XLV', 'XLP', 'XLY', 'XLRE', 'XLF', 'XLI', 'XLB']
+
+    html = f"""
+    <h1>Seasonality - ETF Market</h1>
+    {MENU_BAR}
+    <div>
+        <h3>Select ETF or View All:</h3>
+        <div>
+            <button onclick="window.location.href='/seasonality/etf-market?ticker=ALL'">ALL</button>
+    """
+    for t in etf_tickers:
+        html += f"""
+            <button onclick="window.location.href='/seasonality/etf-market?ticker={t}'">{t}</button>
+        """
+    html += """
+        </div>
+        {'<p style="color: red;">Error: ' + error + '</p>' if error else ''}
+        {'<p>No data available for ticker ' + ticker + '</p>' if not error and not data else ''}
+        <table border='1' {'style="display: none;"' if not data else ''} id="etfMarketTable">
+            <tr>
+                <th><a href="#" onclick="sortTable('ticker')">Ticker</a></th>
+                <th><a href="#" onclick="sortTable('month')">Month</a></th>
+                <th><a href="#" onclick="sortTable('avg_change')">Avg Change</a></th>
+                <th><a href="#" onclick="sortTable('max_change')">Max Change</a></th>
+                <th><a href="#" onclick="sortTable('median_change')">Median Change</a></th>
+                <th><a href="#" onclick="sortTable('min_change')">Min Change</a></th>
+                <th><a href="#" onclick="sortTable('positive_closes')">Positive Closes</a></th>
+                <th><a href="#" onclick="sortTable('positive_months_perc')">Positive Months %</a></th>
+                <th><a href="#" onclick="sortTable('years')">Years</a></th>
+            </tr>
+    """
+    if data:
+        for item in data:
+            # Format numerical values with 2 decimal places and red color for negatives
+            avg_change = item['avg_change']
+            max_change = item['max_change']
+            median_change = item['median_change']
+            min_change = item['min_change']
+            positive_months_perc = float(item['positive_months_perc']) * 100  # Convert to percentage
+
+            # Format for display with red color for negative values
+            def format_with_color(value, decimals=2):
+                color = 'red' if value < 0 else 'black'
+                return f'<span style="color: {color}">{value:.{decimals}f}</span>'
+
+            html += f"""
+            <tr>
+                <td>{item['ticker']}</td>
+                <td>{item['month']}</td>
+                <td>{format_with_color(avg_change)}</td>
+                <td>{format_with_color(max_change)}</td>
+                <td>{format_with_color(median_change)}</td>
+                <td>{format_with_color(min_change)}</td>
+                <td>{item['positive_closes']}</td>
+                <td>{positive_months_perc:.2f}%</td>
+                <td>{item['years']}</td>
+            </tr>
+            """
+    html += """
+        </table>
+    </div>
+    <script>
+        let sortState = { col: 'ticker', dir: 'asc' };
+
+        function sortTable(col) {
+            const newDir = sortState.col === col && sortState.dir === 'asc' ? 'desc' : 'asc';
+            sortState = { col: col, dir: newDir };
+
+            let url = `/seasonality/etf-market?ticker={ticker}&sort_col=${col}&sort_dir=${newDir}`;
+            window.location.href = url;
+        }
+
+        // Apply sorting if query parameters exist
+        const urlParams = new URLSearchParams(window.location.search);
+        const sortCol = urlParams.get('sort_col');
+        const sortDir = urlParams.get('sort_dir');
+        if (sortCol && sortDir) {
+            sortState.col = sortCol;
+            sortState.dir = sortDir;
         }
     </script>
     """
