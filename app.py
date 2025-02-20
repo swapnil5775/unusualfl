@@ -382,23 +382,17 @@ def seasonality_etf_market():
     data = None
     error = None
 
-    # List of ETF tickers for buttons
-    etf_tickers = ['SPY', 'QQQ', 'IWM', 'XLE', 'XLC', 'XLK', 'XLV', 'XLP', 'XLY', 'XLRE', 'XLF', 'XLI', 'XLB']
-
-    if ticker == 'ALL':
-        response = get_api_data(SEASONALITY_MARKET_API_URL)
-        if "error" in response:
-            error = response["error"]
-        else:
-            data = response.get("data", [])
+    # Fetch all ETF seasonality data from the market endpoint
+    response = get_api_data(SEASONALITY_MARKET_API_URL)
+    if "error" in response:
+        error = response["error"]
     else:
-        # Fetch data for a specific ticker
-        url = SEASONALITY_API_URL.format(ticker=ticker)
-        response = get_api_data(url)
-        if "error" in response:
-            error = response["error"]
-        else:
-            data = response.get("data", [])
+        all_data = response.get("data", [])
+        # Filter data based on the selected ticker (or show all if 'ALL')
+        data = [item for item in all_data if item['ticker'] == ticker] if ticker != 'ALL' else all_data
+
+    # List of ETF tickers for buttons (defined globally)
+    etf_tickers = ['SPY', 'QQQ', 'IWM', 'XLE', 'XLC', 'XLK', 'XLV', 'XLP', 'XLY', 'XLRE', 'XLF', 'XLI', 'XLB']
 
     html = f"""
     <h1>Seasonality - ETF Market</h1>
@@ -431,11 +425,11 @@ def seasonality_etf_market():
     """
     if data:
         for item in data:
-            # Format numerical values with 2 decimal places and red color for negatives
-            avg_change = item['avg_change']
-            max_change = item['max_change']
-            median_change = item['median_change']
-            min_change = item['min_change']
+            # Convert string values to floats for numerical columns
+            avg_change = float(item['avg_change']) if item['avg_change'] else 0.0
+            max_change = float(item['max_change']) if item['max_change'] else 0.0
+            median_change = float(item['median_change']) if item['median_change'] else 0.0
+            min_change = float(item['min_change']) if item['min_change'] else 0.0
             positive_months_perc = float(item['positive_months_perc']) * 100  # Convert to percentage
 
             # Format for display with red color for negative values
