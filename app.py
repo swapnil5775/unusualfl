@@ -10,7 +10,7 @@ APIKEY = "bd0cf36c-5072-4b1e-87ee-7e278b8a02e5"
 FLOW_API_URL = "https://api.unusualwhales.com/api/option-trades/flow-alerts"
 INST_LIST_API_URL = "https://api.unusualwhales.com/api/institutions"
 INST_HOLDINGS_API_URL = "https://api.unusualwhales.com/api/institution/{name}/holdings"
-MARKET_TIDE_API_URL = "https://api.unusualwhales.com/api/market-tide"  # Updated endpoint
+MARKET_TIDE_API_URL = "https://api.unusualwhales.com/api/market-tide"
 
 def get_api_data(url, params=None):
     headers = {"Authorization": f"Bearer {APIKEY}"}
@@ -19,7 +19,7 @@ def get_api_data(url, params=None):
         response.raise_for_status()
         return response.json()
     except (requests.RequestException, json.JSONDecodeError) as e:
-        return {"error": f"{str(e)} - URL: {response.url if 'response' in locals() else url}"}
+        return {"error": str(e)}
 
 # Menu bar template
 MENU_BAR = """
@@ -159,22 +159,31 @@ def research():
         """
         return render_template_string(html)
 
-    institutions = inst_data.get("data", [])[:10]
-    inst_names = [inst if isinstance(inst, str) else inst.get('name', 'N/A') for inst in institutions]
+    institutions = inst_data.get("data", [])
     holdings_master = {}
+    inst_totals = {}
 
-    for name in inst_names:
+    # Aggregate holdings and calculate total units per institution
+    for inst in institutions:
+        name = inst if isinstance(inst, str) else inst.get('name', 'N/A')
         holdings_data = get_api_data(INST_HOLDINGS_API_URL.format(name=name))
         if "error" not in holdings_data:
             holdings = holdings_data.get("data", [])
+            total_units = 0
             for holding in holdings:
                 ticker = holding.get("ticker")
                 units = float(holding.get("units", 0) or 0)
+                total_units += units
                 if ticker:
                     if ticker not in holdings_master:
                         holdings_master[ticker] = {}
                     holdings_master[ticker][name] = units
+            inst_totals[name] = total_units
 
+    # Sort institutions by total holdings (descending)
+    inst_names = sorted(inst_totals.keys(), key=lambda x: inst_totals[x], reverse=True)[:10]  # Top 10
+
+    # Master table with sorted institution columns
     table_html = "<table border='1' id='masterTable'><tr><th>Ticker</th><th>Total Units</th>"
     for name in inst_names:
         table_html += f"<th>{name}</th>"
@@ -192,13 +201,14 @@ def research():
         ticker_options += f"<option value='{ticker}'>{ticker}</option>"
     table_html += "</table>"
 
+    # Horizontal bar chart for top 10 institutions
     chart_html = f"""
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <select id="tickerSelect" onchange="updateChart()">
         <option value="">Select a Ticker</option>
         {ticker_options}
     </select>
-    <canvas id="holdingsChart" width="600" height="150"></canvas>
+    <canvas id="holdingsChart" width="600" height="300"></canvas>
     <script>
         const holdingsData = {json.dumps(holdings_master)};
         let chart;
@@ -209,8 +219,13 @@ def research():
 
             const ctx = document.getElementById('holdingsChart').getContext('2d');
             const data = holdingsData[ticker] || {{}};
-            const labels = Object.keys(data);
-            const values = Object.values(data);
+            const allLabels = Object.keys(data);
+            const allValues = Object.values(data);
+            const sortedData = allLabels.map((label, idx) => ({ label: label, value: allValues[idx] }))
+                .sort((a, b) => b.value - a.value)
+                .slice(0, 10); // Top 10
+            const labels = sortedData.map(d => d.label);
+            const values = sortedData.map(d => d.value);
 
             if (chart) chart.destroy();
             chart = new Chart(ctx, {{
@@ -226,14 +241,14 @@ def research():
                     }}]
                 }},
                 options: {{
+                    indexAxis: 'y', // Horizontal bars
                     scales: {{
-                        y: {{ beginAtZero: true }}
+                        x: {{ beginAtZero: true, title: {{ display: true, text: 'Units Held' }} }},
+                        y: {{ title: {{ display: true, text: 'Institution' }} }}
                     }},
                     plugins: {{
                         legend: {{ display: false }}
-                    }},
-                    barPercentage: 0.8,
-                    categoryPercentage: 0.9
+                    }}
                 }}
             }});
         }}
@@ -245,7 +260,7 @@ def research():
     {MENU_BAR}
     <h2>All Institution Holdings</h2>
     {table_html}
-    <h2>Holdings by Institution</h2>
+    <h2>Top 10 Holdings by Institution</h2>
     {chart_html}
     """
     return render_template_string(html)
@@ -254,7 +269,7 @@ def research():
 @app.route('/market-tide', methods=['GET'])
 def market_tide():
     ticker = request.args.get('ticker', 'SPY')
-    date = request.args.get('date', '2023-01-01')  # Default to a past date with data
+    date = request.args.get('date', '2023-01-01')
 
     params = {"ticker": ticker, "date": date}
     data = get_api_data(MARKET_TIDE_API_URL, params=params)
@@ -284,7 +299,6 @@ def market_tide():
             <p>No data found for {ticker} on {date}.</p>
             """
         else:
-            # Assuming data is a dict of key-value pairs for the day
             labels = list(tide_data.keys())
             values = [float(tide_data.get(key, 0) or 0) for key in labels]
             chart_data = json.dumps({"labels": labels, "values": values})
