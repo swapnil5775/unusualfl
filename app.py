@@ -1,9 +1,8 @@
+import os
 from flask import Flask, render_template_string, request, jsonify
 import requests
 import json
 from datetime import datetime, timedelta
-import sqlite3
-from threading import Thread
 
 app = Flask(__name__)
 
@@ -13,19 +12,6 @@ FLOW_API_URL = "https://api.unusualwhales.com/api/option-trades/flow-alerts"
 INST_LIST_API_URL = "https://api.unusualwhales.com/api/institutions"
 INST_HOLDINGS_API_URL = "https://api.unusualwhales.com/api/institution/{name}/holdings"
 MARKET_TIDE_API_URL = "https://api.unusualwhales.com/api/v1/market-tide"
-
-# Database setup
-def init_db():
-    conn = sqlite3.connect('option_flow.db')
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS option_flow
-                 (id INTEGER PRIMARY KEY, ticker TEXT, type TEXT, strike REAL, price REAL,
-                  total_size INTEGER, expiry TEXT, start_time INTEGER, total_premium REAL,
-                  alert_rule TEXT, date TEXT)''')
-    conn.commit()
-    conn.close()
-
-init_db()
 
 def get_api_data(url, params=None):
     headers = {"Authorization": f"Bearer {APIKEY}"}
@@ -71,13 +57,11 @@ def institution_list():
         <table border='1' class='inst-table' id='instTable'>
             <tr><th>Name</th></tr>
     """
-    
     if "error" not in data:
         institutions = data.get("data", []) if isinstance(data, dict) else data
         for inst in institutions:
             name = inst if isinstance(inst, str) else inst.get('name', 'N/A')
             html += f"<tr><td><a href='#' onclick='showHoldings(\"{name}\")'>{name}</a></td></tr>"
-    
     html += """
         </table>
         <div id="holdingsContainer" class="holdings-table">
@@ -91,13 +75,16 @@ def institution_list():
                 .then(response => response.json())
                 .then(data => {{
                     let table = '<tr><th>Ticker</th><th>Units</th><th>Value</th></tr>';
-                    data.data.forEach(holding => {{
-                        table += `<tr><td>${{holding.ticker}}</td><td>${{holding.units}}</td><td>${{holding.value}}</td></tr>`;
-                    }});
+                    if (data.data) {{
+                        data.data.forEach(holding => {{
+                            table += `<tr><td>${{holding.ticker || 'N/A'}}</td><td>${{holding.units || 'N/A'}}</td><td>${{holding.value || 'N/A'}}</td></tr>`;
+                        }});
+                    }}
                     document.getElementById('holdingsTable').innerHTML = table;
                     document.getElementById('instTable').classList.add('hide');
                     document.getElementById('holdingsContainer').classList.add('show');
-                }});
+                }})
+                .catch(error => console.error('Error:', error));
         }}
         function closeHoldings() {{
             document.getElementById('instTable').classList.remove('hide');
@@ -121,31 +108,21 @@ def option_flow():
     limit = int(request.args.get('limit', 100))
     offset = int(request.args.get('offset', 0))
 
-    # Check database first
-    conn = sqlite3.connect('option_flow.db')
-    c = conn.cursor()
-    c.execute(f"SELECT * FROM option_flow WHERE date = ? ORDER BY {sort_col} {sort_dir} LIMIT ? OFFSET ?", 
-              (date, limit, offset))
-    trades = c.fetchall()
-    conn.close()
+    params = {"limit": limit, "offset": offset}
+    data = get_api_data(FLOW_API_URL, params=params)
+    trades = data.get("data", []) if "error" not in data else []
 
-    if not trades:
-        params = {"limit": limit, "offset": offset}
-        data = get_api_data(FLOW_API_URL, params=params)
-        if "error" not in data:
-            trades = data.get("data", [])
-            # Store in database
-            conn = sqlite3.connect('option_flow.db')
-            c = conn.cursor()
-            for trade in trades:
-                c.execute("""INSERT OR REPLACE INTO option_flow 
-                            (ticker, type, strike, price, total_size, expiry, start_time, total_premium, alert_rule, date)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                          (trade.get('ticker'), trade.get('type'), trade.get('strike'), trade.get('price'),
-                           trade.get('total_size'), trade.get('expiry'), trade.get('start_time'),
-                           trade.get('total_premium'), trade.get('alert_rule'), date))
-            conn.commit()
-            conn.close()
+    # Filter by date (client-side approximation since API might not support exact date filtering)
+    trades = [t for t in trades if datetime.fromtimestamp(t.get('start_time', 0)/1000).strftime('%Y-%m-%d') == date]
+
+    # Sort trades
+    sort_key = {'ticker': 'ticker', 'type': 'type', 'strike': 'strike', 'price': 'price',
+                'total_size': 'total_size', 'expiry': 'expiry', 'start_time': 'start_time',
+                'total_premium': 'total_premium', 'alert_rule': 'alert_rule'}
+    def get_sort_value(trade, key):
+        val = trade.get(sort_key[key], '')
+        return float(val) if isinstance(val, (int, float)) else str(val).lower()
+    trades.sort(key=lambda x: get_sort_value(x, sort_col), reverse=(sort_dir == 'desc'))
 
     html = f"""
     <h1>Option Flow Alerts</h1>
@@ -171,16 +148,17 @@ def option_flow():
             <th><a href="#" onclick="sortTable('alert_rule')">Alert Rule</a></th>
         </tr>
     """
-    
     for trade in trades:
-        start_time = datetime.fromtimestamp(trade[7]/1000).strftime('%Y-%m-%d %H:%M:%S')
+        start_time = datetime.fromtimestamp(trade.get('start_time', 0)/1000).strftime('%Y-%m-%d %H:%M:%S')
         html += f"""
         <tr>
-            <td>{trade[1]}</td><td>{trade[2]}</td><td>{trade[3]}</td><td>{trade[4]}</td>
-            <td>{trade[5]}</td><td>{trade[6]}</td><td>{start_time}</td><td>{trade[8]}</td><td>{trade[9]}</td>
+            <td>{trade.get('ticker', 'N/A')}</td><td>{trade.get('type', 'N/A')}</td>
+            <td>{trade.get('strike', 'N/A')}</td><td>{trade.get('price', 'N/A')}</td>
+            <td>{trade.get('total_size', 'N/A')}</td><td>{trade.get('expiry', 'N/A')}</td>
+            <td>{start_time}</td><td>{trade.get('total_premium', 'N/A')}</td>
+            <td>{trade.get('alert_rule', 'N/A')}</td>
         </tr>
         """
-
     html += f"""
     </table>
     <script>
@@ -199,20 +177,13 @@ def option_flow():
             fetch('/collect_past_data', {{method: 'POST'}})
                 .then(response => response.json())
                 .then(data => {{
-                    let progress = 0;
-                    const bar = document.getElementById('progressBar');
-                    const msg = document.getElementById('progressMsg');
-                    const interval = setInterval(() => {{
-                        if (progress >= 15) {{
-                            clearInterval(interval);
-                            msg.textContent = 'Collection Complete: ' + data.trades + ' trades saved';
-                            setTimeout(() => document.getElementById('progress').style.display = 'none', 2000);
-                        }} else {{
-                            progress++;
-                            bar.value = progress;
-                            msg.textContent = `Processing day ${progress} of 15...`;
-                        }}
-                    }}, 500);
+                    document.getElementById('progressBar').value = 1;
+                    document.getElementById('progressMsg').textContent = 'Processed: ' + data.trades + ' trades';
+                    setTimeout(() => document.getElementById('progress').style.display = 'none', 2000);
+                }})
+                .catch(error => {{
+                    document.getElementById('progressMsg').textContent = 'Error collecting data';
+                    console.error('Error:', error);
                 }});
         }}
     </script>
@@ -221,33 +192,13 @@ def option_flow():
 
 @app.route('/collect_past_data', methods=['POST'])
 def collect_past_data():
-    def collect_data():
-        total_trades = 0
-        conn = sqlite3.connect('option_flow.db')
-        c = conn.cursor()
-        for i in range(15):
-            date = (datetime.utcnow() - timedelta(days=i)).strftime('%Y-%m-%d')
-            params = {"limit": 500, "offset": 0}
-            data = get_api_data(FLOW_API_URL, params=params)
-            if "error" not in data:
-                trades = data.get("data", [])
-                for trade in trades:
-                    c.execute("""INSERT OR IGNORE INTO option_flow 
-                                (ticker, type, strike, price, total_size, expiry, start_time, total_premium, alert_rule, date)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                              (trade.get('ticker'), trade.get('type'), trade.get('strike'), trade.get('price'),
-                               trade.get('total_size'), trade.get('expiry'), trade.get('start_time'),
-                               trade.get('total_premium'), trade.get('alert_rule'), date))
-                total_trades += len(trades)
-        conn.commit()
-        conn.close()
-        return total_trades
+    # Simplified for Vercel: processes only the latest day to stay within timeout limits
+    date = datetime.utcnow().strftime('%Y-%m-%d')
+    params = {"limit": 500, "offset": 0}
+    data = get_api_data(FLOW_API_URL, params=params)
+    trades = data.get("data", []) if "error" not in data else []
+    return jsonify({"trades": len(trades)})
 
-    thread = Thread(target=collect_data)
-    thread.start()
-    return jsonify({"status": "started"})
-
-# Research Page
 @app.route('/research')
 def research():
     inst_data = get_api_data(INST_LIST_API_URL)
@@ -361,7 +312,6 @@ def research():
     """
     return render_template_string(html)
 
-# Market Tide Page
 @app.route('/market-tide', methods=['GET'])
 def market_tide():
     ticker = request.args.get('ticker', 'SPY')
@@ -434,6 +384,11 @@ def market_tide():
             {chart_html}
             """
     return render_template_string(html)
+
+# Vercel serverless handler
+def handler(request):
+    from wsgiref.handlers import CGIHandler
+    return CGIHandler().run(app)
 
 if __name__ == "__main__":
     app.run(debug=True)
