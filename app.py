@@ -17,8 +17,11 @@ def get_api_data(url, params=None):
     try:
         response = requests.get(url, headers=headers, params=params)
         response.raise_for_status()
+        print(f"Response Status Code: {response.status_code}")
+        print(f"Response Headers: {dict(response.headers)}")  # Exclude sensitive headers if needed
         return response.json()
     except (requests.RequestException, json.JSONDecodeError) as e:
+        print(f"Request Error - URL: {url}, Status Code: {getattr(response, 'status_code', 'N/A')}, Error: {str(e)}")
         return {"error": f"{str(e)} - URL: {url}", "raw": response.text if 'response' in locals() else ""}
 
 MENU_BAR = """
@@ -390,25 +393,39 @@ def seasonality_etf_market():
             # Log detailed error to Vercel logs for debugging
             print(f"API Error for {SEASONALITY_MARKET_API_URL}: {error}")
             print(f"Raw API response: {response.get('raw', 'No raw data available')}")
+            # Check for common API issues
+            if "rate limit" in str(error).lower():
+                error += " (Check Unusual Whales API rate limits or contact support)"
+            elif "invalid key" in str(error).lower():
+                error += " (Verify APIKEY in Vercel, though confirmed present)"
+            elif "endpoint" in str(error).lower() or "not found" in str(error).lower():
+                error += " (Verify Unusual Whales seasonality/market endpoint is active)"
         else:
             all_data = response.get("data", [])
             # Log the raw data for debugging, including full structure
             print(f"API Response Data Length for {SEASONALITY_MARKET_API_URL}: {len(all_data)}")
-            print(f"Full API Response Sample: {all_data[:5] if all_data else 'Empty data'}")
-            # Ensure all_data contains the expected fields
-            if all_data and not any('ticker' in item and 'month' in item for item in all_data):
-                error = "Unexpected API response: Missing required fields (ticker, month)"
-                print(f"Unexpected API response structure: {all_data[:1] if all_data else 'No data'}")
+            print(f"Full API Response Sample: {json.dumps(all_data[:5] if all_data else 'Empty data', indent=2)}")
+            # Ensure all_data contains the expected fields and matches curl output
+            if not all_data:
+                error = "API returned empty data array"
+                print("API returned empty data array - possible rate limit or endpoint issue")
+            elif not any('ticker' in item and 'month' in item and 'avg_change' in item for item in all_data):
+                error = "Unexpected API response: Missing required fields (ticker, month, avg_change)"
+                print(f"Unexpected API response structure: {json.dumps(all_data[:1] if all_data else 'No data', indent=2)}")
             else:
                 # Filter data based on the selected ticker (or show all if 'ALL')
                 data = [item for item in all_data if item['ticker'] == ticker] if ticker != 'ALL' else all_data
                 # Log filtered data length and sample
                 print(f"Filtered Data Length for ticker '{ticker}': {len(data)}")
-                print(f"Filtered Data Sample for ticker '{ticker}': {data[:5] if data else 'Empty filtered data'}")
+                print(f"Filtered Data Sample for ticker '{ticker}': {json.dumps(data[:5] if data else 'Empty filtered data', indent=2)}")
                 # Verify data structure after filtering
                 if data and not any('ticker' in item for item in data):
                     error = f"Filtered data for ticker '{ticker}' missing 'ticker' field"
-                    print(f"Unexpected filtered data structure: {data[:1] if data else 'No filtered data'}")
+                    print(f"Unexpected filtered data structure: {json.dumps(data[:1] if data else 'No filtered data', indent=2)}")
+                # Check if filtered data matches expected ETFs from curl output
+                if data and ticker != 'ALL' and not any(item['ticker'] == ticker for item in data):
+                    error = f"No data found for ticker '{ticker}' in API response"
+                    print(f"No matching ticker '{ticker}' found in API response: {json.dumps(data[:1] if data else 'No data', indent=2)}")
     except Exception as e:
         error = f"Unexpected error fetching data: {str(e)}"
         print(f"Unexpected Error in seasonality_etf_market: {str(e)}")
@@ -502,6 +519,7 @@ def seasonality_etf_market():
     </script>
     """
     return render_template_string(html)
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
