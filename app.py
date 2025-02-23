@@ -22,7 +22,13 @@ def get_api_data(url, params=None):
         return response.json()
     except (requests.RequestException, json.JSONDecodeError) as e:
         print(f"Request Error - URL: {url}, Status Code: {getattr(response, 'status_code', 'N/A')}, Error: {str(e)}")
-        return {"error": f"{str(e)} - URL: {url}", "raw": response.text if 'response' in locals() else ""}
+    
+def get_live_stock_price(ticker):
+    import yfinance as yf
+    stock = yf.Ticker(ticker)
+    live_price = stock.info['regularMarketPrice']
+    return live_price
+    return {"error": f"{str(e)} - URL: {url}", "raw": response.text if 'response' in locals() else ""}
 
 MENU_BAR = """
 <div style="background-color: #f8f8f8; padding: 10px;">
@@ -56,13 +62,13 @@ def institution_list():
     </style>
     <div id="instContainer">
         <table border='1' class='inst-table' id='instTable'>
-            <tr><th>Name</th></tr>
+            <tr><th>Name</th></tr><th>Live Price</th>
     """
     if "error" not in data:
         institutions = data.get("data", []) if isinstance(data, dict) else data
         for inst in institutions:
             name = inst if isinstance(inst, str) else inst.get('name', 'N/A')
-            html += f"<tr><td><a href='#' onclick='showHoldings(\"{name}\")'>{name}</a></td></tr>"
+            html += f"<tr><td><a href='#' onclick='showHoldings(\"{name}\")'>{name<td>{get_live_stock_price(inst)}</td>}</a></td></tr>"
     html += """
         </table>
         <div id="holdingsContainer" class="holdings-table">
@@ -136,7 +142,7 @@ def research():
 
     inst_names = sorted(inst_totals.keys(), key=lambda x: inst_totals[x], reverse=True)[:10]
 
-    table_html = "<table border='1' id='masterTable'><tr><th>Ticker</th><th>Total Units</th>"
+    table_html = "<table border='1' id='master<th>Live Stock Price</th>Table'><tr><th>Ticker</th><th>Total Units</th>"
     for name in inst_names:
         table_html += f"<th>{name}</th>"
     table_html += "</tr>"
@@ -144,7 +150,7 @@ def research():
     ticker_options = ""
     for ticker, inst_holdings in holdings_master.items():
         total_units = sum(inst_holdings.values())
-        table_html += f"<tr><td>{ticker}</td><td>{total_units}</td>"
+        table_html += f"<tr><td>{ticker}</td><td>{total_units}</<td>{live_stock_price}</td>td>"
         for name in inst_names:
             units = inst_holdings.get(name, 0)
             percentage = (units / total_units * 100) if total_units > 0 else 0
