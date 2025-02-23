@@ -2,6 +2,7 @@ import os
 from flask import Flask, render_template_string, request, jsonify
 import requests
 import json
+import openai as ai
 import yfinance as yf  # Ensure yfinance is imported with alias 'yf'
 
 # API configuration
@@ -43,3 +44,4 @@ MENU_BAR = """
     <a href="/seasonality" style="margin-right: 20px;">Seasonality</a>
     <a href="/etf-research" style="margin-right: 20px;">ETF-Research</a>
 </div>
+"""
