@@ -78,15 +78,15 @@ def seasonality_per_ticker():
         performance_values_filtered = [performance_values[years.index(year)] for year in common_years if year in years]
         price_values_filtered = [price_values[price_years.index(year)] for year in common_years if year in price_years]
 
-    # Build HTML with proper Jinja2 syntax for render_template_string
+    # Build HTML with Python f-string syntax (no Jinja2 in f-string)
     html = f"""
     <h1>Seasonality - Per Ticker</h1>
     {MENU_BAR}
     <div style="display: flex; flex-wrap: wrap;">
         <div style="flex: 1; min-width: 300px; margin-bottom: 20px;">
             <h2>ETF Info for {ticker or ''}</h2>
-            {% if etf_info_error %}<p style="color: red;">Error fetching ETF Info: {{ etf_info_error }}</p>{% endif %}
-            <table border='1' {% if not etf_info %}style="display: none;"{% endif %} id="etfInfoTable">
+            {f'<p style="color: red;">Error fetching ETF Info: {etf_info_error}</p>' if etf_info_error else ''}
+            <table border='1' {'style="display: none;"' if not etf_info else ''} id="etfInfoTable">
                 <tr><th>Field</th><th>Value</th></tr>
     """
     if etf_info:
@@ -99,16 +99,16 @@ def seasonality_per_ticker():
         <div style="flex: 2; min-width: 300px;">
             <form method="GET">
                 <label>Enter Ticker (e.g., AAPL, TSLA, PLTR): </label>
-                <input type="text" name="ticker" value="{{ ticker }}" placeholder="Enter ticker symbol">
+                <input type="text" name="ticker" value="{ticker}" placeholder="Enter ticker symbol">
                 <button type="submit">GO</button>
             </form>
-            {% if monthly_error %}<p style="color: red;">Error (Monthly Data): {{ monthly_error }}</p>{% endif %}
-            {% if yearly_monthly_error %}<p style="color: red;">Error (Year-Month Data): {{ yearly_monthly_error }}</p>{% endif %}
-            {% if not monthly_error and not monthly_data %}<p>No monthly data available for ticker {{ ticker or '' }}</p>{% endif %}
-            {% if not yearly_monthly_error and not yearly_monthly_data %}<p>No year-month data available for ticker {{ ticker or '' }}</p>{% endif %}
+            {f'<p style="color: red;">Error (Monthly Data): {monthly_error}</p>' if monthly_error else ''}
+            {f'<p style="color: red;">Error (Year-Month Data): {yearly_monthly_error}</p>' if yearly_monthly_error else ''}
+            {f'<p>No monthly data available for ticker {ticker or ''}</p>' if not monthly_error and not monthly_data else ''}
+            {f'<p>No year-month data available for ticker {ticker or ''}</p>' if not yearly_monthly_error and not yearly_monthly_data else ''}
 
             <h2>Monthly Seasonality Statistics</h2>
-            <table border='1' {% if not monthly_data %}style="display: none;"{% endif %} id="monthlySeasonalityTable">
+            <table border='1' {'style="display: none;"' if not monthly_data else ''} id="monthlySeasonalityTable">
                 <tr>
                     <th><a href="#" onclick="sortTable('month', 'monthly')">Month</a></th>
                     <th><a href="#" onclick="sortTable('avg_change', 'monthly')">Avg Change</a></th>
@@ -172,7 +172,7 @@ def seasonality_per_ticker():
 
     html += """
         <h2>15-Year Monthly Return History</h2>
-        <table border='1' {% if not yearly_monthly_data %}style="display: none;"{% endif %} id="yearlyMonthlySeasonalityTable">
+        <table border='1' {'style="display: none;"' if not yearly_monthly_data else ''} id="yearlyMonthlySeasonalityTable">
             <tr>
                 <th><a href="#" onclick="sortTable('year', 'yearly')">Year</a></th>
                 <th><a href="#" onclick="sortTable('month', 'yearly')">Month</a></th>
@@ -410,15 +410,15 @@ def seasonality_etf_market():
 
     etf_tickers = ['SPY', 'QQQ', 'IWM', 'XLE', 'XLC', 'XLK', 'XLV', 'XLP', 'XLY', 'XLRE', 'XLF', 'XLI', 'XLB']
 
-    # Build HTML with proper Jinja2 syntax for render_template_string
+    # Build HTML with Python f-string syntax (no Jinja2 in f-string)
     html = f"""
     <h1>Seasonality - ETF Market</h1>
     {MENU_BAR}
     <div style="display: flex; flex-wrap: wrap;">
         <div style="flex: 1; min-width: 300px; margin-bottom: 20px;">
             <h2>ETF Info for {ticker if ticker != 'ALL' else ''}</h2>
-            {% if etf_info_error %}<p style="color: red;">Error fetching ETF Info: {{ etf_info_error }}</p>{% endif %}
-            <table border='1' {% if not etf_info or ticker == 'ALL' %}style="display: none;"{% endif %} id="etfInfoTable">
+            {f'<p style="color: red;">Error fetching ETF Info: {etf_info_error}</p>' if etf_info_error else ''}
+            <table border='1' {'style="display: none;"' if not etf_info or ticker == 'ALL' else ''} id="etfInfoTable">
                 <tr><th>Field</th><th>Value</th></tr>
     """
     if etf_info and ticker != 'ALL':
@@ -439,9 +439,9 @@ def seasonality_etf_market():
         """
     html += """
             </div>
-            {% if error %}<p style="color: red;">Error: {{ error }}</p>{% endif %}
-            {% if not error and not data %}<p>No data available for ticker {{ ticker }}</p>{% endif %}
-            <table border='1' {% if not data %}style="display: none;"{% endif %} id="etfMarketTable">
+            {f'<p style="color: red;">Error: {error}</p>' if error else ''}
+            {f'<p>No data available for ticker {ticker}</p>' if not error and not data else ''}
+            <table border='1' {'style="display: none;"' if not data else ''} id="etfMarketTable">
                 <tr>
                     <th><a href="#" onclick="sortTable('ticker')">Ticker</a></th>
                     <th><a href="#" onclick="sortTable('month')">Month</a></th>
@@ -536,7 +536,7 @@ def seasonality_etf_market():
         </table>
         """
     elif ticker != 'ALL' and (yearly_performance and "error" in yearly_performance or yearly_prices and "error" in yearly_prices):
-        html += f"<p style='color: red;'>{(yearly_performance.get('error', '') if yearly_performance else '') + ' ' + (yearly_prices.get('error', '') if yearly_prices else '')}</p>"
+        html += f"<p style='color: red;'>{yearly_performance.get('error', '') + ' ' + yearly_prices.get('error', '') if yearly_performance or yearly_prices else ''}</p>"
 
     html += """
     </div>
