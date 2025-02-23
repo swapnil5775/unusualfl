@@ -425,7 +425,7 @@ def seasonality_etf_market():
     """
     for t in etf_tickers:
         html += f"""
-            <button onclick="window.location.href='/seasonality/etf-market?ticker={t}'">{t}</button>
+            <button onclick="window.location.href'/seasonality/etf-market?ticker={t}'">{t}</button>
         """
     html += """
         </div>
@@ -486,31 +486,87 @@ def seasonality_etf_market():
 
         html += f"""
         <h2>Yearly Analysis for {ticker}</h2>
-        <div style="display: flex; flex-wrap: wrap; justify-content: space-around; margin-top: 20px;">
-            <div style="flex: 1; min-width: 300px; margin: 10px;">
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-around; margin-top: 20px; gap: 20px;">
+            <div style="flex: 1; min-width: 300px; max-width: 400px;">
+                <h3>Price Action (Line)</h3>
+                <canvas id="yearlyPriceChart"></canvas>
+            </div>
+            <div style="flex: 1; min-width: 300px; max-width: 400px;">
+                <h3>Performance (Bar)</h3>
+                <canvas id="yearlyBarChart"></canvas>
+            </div>
+            <div style="flex: 1; min-width: 300px; max-width: 400px;">
                 <h3>Combined Performance & Price</h3>
                 <canvas id="combinedChart"></canvas>
             </div>
         </div>
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
         <script>
-            const ctx = document.getElementById('combinedChart').getContext('2d');
-            const combinedChart = new Chart(ctx, {{
+            // Price Action Line Chart
+            const priceCtx = document.getElementById('yearlyPriceChart').getContext('2d');
+            const priceChart = new Chart(priceCtx, {{
                 type: 'line',
+                data: {{
+                    labels: {json.dumps(common_years)},
+                    datasets: [{{
+                        label: 'Yearly Closing Price',
+                        data: {json.dumps(price_values_filtered)},
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 3
+                    }}]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    scales: {{
+                        x: {{ title: {{ display: true, text: 'Year' }}, ticks: {{ maxRotation: 45, minRotation: 45 }} }},
+                        y: {{ title: {{ display: true, text: 'Price ($)' }}, beginAtZero: true }}
+                    }},
+                    plugins: {{
+                        legend: {{ display: false }}
+                    }}
+                }}
+            }});
+
+            // Performance Bar Chart
+            const barCtx = document.getElementById('yearlyBarChart').getContext('2d');
+            const barChart = new Chart(barCtx, {{
+                type: 'bar',
+                data: {{
+                    labels: {json.dumps(common_years)},
+                    datasets: [{{
+                        label: 'Yearly % Change',
+                        data: {json.dumps(performance_values_filtered)},
+                        backgroundColor: {json.dumps([val >= 0 and 'rgba(75, 192, 192, 0.7)' or 'rgba(255, 99, 132, 0.7)' for val in performance_values_filtered])},
+                        borderColor: {json.dumps([val >= 0 and 'rgba(75, 192, 192, 1)' or 'rgba(255, 99, 132, 1)' for val in performance_values_filtered])},
+                        borderWidth: 1
+                    }}]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    scales: {{
+                        x: {{ title: {{ display: true, text: 'Year' }}, ticks: {{ maxRotation: 45, minRotation: 45 }} }},
+                        y: {{ title: {{ display: true, text: '%' }}, beginAtZero: true }}
+                    }},
+                    plugins: {{
+                        legend: {{ display: false }}
+                    }}
+                }}
+            }});
+
+            // Combined Chart (Price Line + Performance Bars)
+            const combinedCtx = document.getElementById('combinedChart').getContext('2d');
+            const combinedChart = new Chart(combinedCtx, {{
+                type: 'bar',
                 data: {{
                     labels: {json.dumps(common_years)},
                     datasets: [
                         {{
-                            label: 'Yearly % Change',
-                            data: {json.dumps(performance_values_filtered)},
-                            borderColor: 'rgba(75, 192, 192, 1)',
-                            backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                            fill: true,
-                            tension: 0.3,
-                            pointRadius: 3,
-                            yAxisID: 'y1'  // Left y-axis for % change
-                        }},
-                        {{
+                            type: 'line',
                             label: 'Yearly Closing Price',
                             data: {json.dumps(price_values_filtered)},
                             borderColor: 'rgba(54, 162, 235, 1)',
@@ -519,6 +575,15 @@ def seasonality_etf_market():
                             tension: 0.3,
                             pointRadius: 3,
                             yAxisID: 'y2'  // Right y-axis for price
+                        }},
+                        {{
+                            type: 'bar',
+                            label: 'Yearly % Change',
+                            data: {json.dumps(performance_values_filtered)},
+                            backgroundColor: {json.dumps([val >= 0 and 'rgba(75, 192, 192, 0.7)' or 'rgba(255, 99, 132, 0.7)' for val in performance_values_filtered])},
+                            borderColor: {json.dumps([val >= 0 and 'rgba(75, 192, 192, 1)' or 'rgba(255, 99, 132, 1)' for val in performance_values_filtered])},
+                            borderWidth: 1,
+                            yAxisID: 'y1'  // Left y-axis for % change
                         }}
                     ]
                 }},
@@ -547,6 +612,32 @@ def seasonality_etf_market():
                 }}
             }});
         </script>
+        """
+
+        # Add Yearly Table below the charts
+        html += f"""
+        <h2>Yearly Data for {ticker}</h2>
+        <table border='1' id="yearlyDataTable">
+            <tr>
+                <th>Year</th>
+                <th>Yearly % Change</th>
+                <th>Yearly Closing Price ($)</th>
+            </tr>
+        """
+        for year in common_years:
+            perf_idx = years.index(year) if year in years else -1
+            price_idx = price_years.index(year) if year in price_years else -1
+            perf_value = performance_values[perf_idx] if perf_idx != -1 else "N/A"
+            price_value = price_values[price_idx] if price_idx != -1 else "N/A"
+            html += f"""
+            <tr>
+                <td>{year}</td>
+                <td>{perf_value:.2f}%</td>
+                <td>${price_value:.2f}</td>
+            </tr>
+            """
+        html += """
+        </table>
         """
     elif ticker != 'ALL' and (yearly_performance and "error" in yearly_performance or yearly_prices and "error" in yearly_prices):
         html += f"<p style='color: red;'>{(yearly_performance.get('error', '') if yearly_performance else '') + ' ' + (yearly_prices.get('error', '') if yearly_prices else '')}</p>"
