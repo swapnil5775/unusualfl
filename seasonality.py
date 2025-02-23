@@ -78,7 +78,7 @@ def seasonality_per_ticker():
         performance_values_filtered = [performance_values[years.index(year)] for year in common_years if year in years]
         price_values_filtered = [price_values[price_years.index(year)] for year in common_years if year in price_years]
 
-    # Build HTML with Python f-string syntax (no Jinja2 in f-string)
+    # Build HTML with Python f-string syntax
     html = f"""
     <h1>Seasonality - Per Ticker</h1>
     {MENU_BAR}
@@ -86,7 +86,7 @@ def seasonality_per_ticker():
         <div style="flex: 1; min-width: 300px; margin-bottom: 20px;">
             <h2>ETF Info for {ticker or ''}</h2>
             {f'<p style="color: red;">Error fetching ETF Info: {etf_info_error}</p>' if etf_info_error else ''}
-            <table border='1' {'style="display: none;"' if not etf_info else ''} id="etfInfoTable">
+            <table border='1' {f'style="display: none;"' if not etf_info else ''} id="etfInfoTable">
                 <tr><th>Field</th><th>Value</th></tr>
     """
     if etf_info:
@@ -108,7 +108,7 @@ def seasonality_per_ticker():
             {f'<p>No year-month data available for ticker {ticker or ''}</p>' if not yearly_monthly_error and not yearly_monthly_data else ''}
 
             <h2>Monthly Seasonality Statistics</h2>
-            <table border='1' {'style="display: none;"' if not monthly_data else ''} id="monthlySeasonalityTable">
+            <table border='1' {f'style="display: none;"' if not monthly_data else ''} id="monthlySeasonalityTable">
                 <tr>
                     <th><a href="#" onclick="sortTable('month', 'monthly')">Month</a></th>
                     <th><a href="#" onclick="sortTable('avg_change', 'monthly')">Avg Change</a></th>
@@ -172,7 +172,7 @@ def seasonality_per_ticker():
 
     html += """
         <h2>15-Year Monthly Return History</h2>
-        <table border='1' {'style="display: none;"' if not yearly_monthly_data else ''} id="yearlyMonthlySeasonalityTable">
+        <table border='1' {f'style="display: none;"' if not yearly_monthly_data else ''} id="yearlyMonthlySeasonalityTable">
             <tr>
                 <th><a href="#" onclick="sortTable('year', 'yearly')">Year</a></th>
                 <th><a href="#" onclick="sortTable('month', 'yearly')">Month</a></th>
@@ -319,9 +319,9 @@ def seasonality_per_ticker():
                     {
                         type: 'bar',
                         label: 'Yearly % Change',
-                        data: performanceValuesFiltered,
+                        data: performance_values_filtered,
                         backgroundColor: performanceColors,
-                        borderColor: performanceBorderColors,
+                        borderColor: performance_border_colors,
                         borderWidth: 1,
                         yAxisID: 'y1'
                     }
@@ -410,7 +410,7 @@ def seasonality_etf_market():
 
     etf_tickers = ['SPY', 'QQQ', 'IWM', 'XLE', 'XLC', 'XLK', 'XLV', 'XLP', 'XLY', 'XLRE', 'XLF', 'XLI', 'XLB']
 
-    # Build HTML with Python f-string syntax (no Jinja2 in f-string)
+    # Build HTML with Python f-string syntax
     html = f"""
     <h1>Seasonality - ETF Market</h1>
     {MENU_BAR}
@@ -418,7 +418,7 @@ def seasonality_etf_market():
         <div style="flex: 1; min-width: 300px; margin-bottom: 20px;">
             <h2>ETF Info for {ticker if ticker != 'ALL' else ''}</h2>
             {f'<p style="color: red;">Error fetching ETF Info: {etf_info_error}</p>' if etf_info_error else ''}
-            <table border='1' {'style="display: none;"' if not etf_info or ticker == 'ALL' else ''} id="etfInfoTable">
+            <table border='1' {f'style="display: none;"' if not etf_info or ticker == 'ALL' else ''} id="etfInfoTable">
                 <tr><th>Field</th><th>Value</th></tr>
     """
     if etf_info and ticker != 'ALL':
@@ -441,7 +441,7 @@ def seasonality_etf_market():
             </div>
             {f'<p style="color: red;">Error: {error}</p>' if error else ''}
             {f'<p>No data available for ticker {ticker}</p>' if not error and not data else ''}
-            <table border='1' {'style="display: none;"' if not data else ''} id="etfMarketTable">
+            <table border='1' {f'style="display: none;"' if not data else ''} id="etfMarketTable">
                 <tr>
                     <th><a href="#" onclick="sortTable('ticker')">Ticker</a></th>
                     <th><a href="#" onclick="sortTable('month')">Month</a></th>
