@@ -25,10 +25,12 @@ def get_api_data(url, params=None):
     
 def get_live_stock_price(ticker):
     import yfinance as yf
-    stock = yf.Ticker(ticker)
-    live_price = stock.info['regularMarketPrice']
-    return live_price
-    return {"error": f"{str(e)} - URL: {url}", "raw": response.text if 'response' in locals() else ""}
+    try:
+        stock = yf.Ticker(ticker)
+        live_price = stock.info['regularMarketPrice']
+        return live_price
+    except Exception as e:
+        return f"Error: {str(e)}"
 
 MENU_BAR = """
 <div style="background-color: #f8f8f8; padding: 10px;">
@@ -62,13 +64,13 @@ def institution_list():
     </style>
     <div id="instContainer">
         <table border='1' class='inst-table' id='instTable'>
-            <tr><th>Name</th></tr><th>Live Price</th>
+            <tr><th>Name</th><th>Live Price</th></tr>
     """
     if "error" not in data:
         institutions = data.get("data", []) if isinstance(data, dict) else data
         for inst in institutions:
             name = inst if isinstance(inst, str) else inst.get('name', 'N/A')
-            html += f"<tr><td><a href='#' onclick='showHoldings(\"{name}\")'>{name<td>{get_live_stock_price(inst)}</td>}</a></td></tr>"
+            html += f"<tr><td><a href='#' onclick='showHoldings(\"{name}\")'>{name}</a></td><td>{get_live_stock_price(name)}</td></tr>"
     html += """
         </table>
         <div id="holdingsContainer" class="holdings-table">
