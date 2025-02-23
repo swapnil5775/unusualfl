@@ -51,8 +51,8 @@ def etf_exposure():
     <div style="display: flex; flex-wrap: wrap;">
         <div style="flex: 1; min-width: 300px; margin-bottom: 20px;">
             <h2>ETF Info for {ticker}</h2>
-            {'<p style="color: red;">Error fetching ETF Info: ' + etf_info_error + '</p>' if etf_info_error else ''}
-            <table border='1' {'style="display: none;"' if not etf_info else ''} id="etfInfoTable">
+            {f'<p style="color: red;">Error fetching ETF Info: {etf_info_error}</p>' if etf_info_error else ''}
+            <table border='1' {f'style="display: none;"' if not etf_info else ''} id="etfInfoTable">
                 <tr><th>Field</th><th>Value</th></tr>
     """
     if etf_info:  # Check if etf_info is not None or empty
@@ -71,13 +71,13 @@ def etf_exposure():
             <h3>Or Click a Predefined ETF:</h3>
             <div>
                 <button onclick="window.location.href='/etf-research/exposure?ticker=SPY'">SPY</button>
-                <button onclick="window.location.href'/etf-research/exposure?ticker=QQQ'">QQQ</button>
-                <button onclick="window.location.href'/etf-research/exposure?ticker=IWM'">IWM</button>
-                <button onclick="window.location.href'/etf-research/exposure?ticker=XLF'">XLF</button>
+                <button onclick="window.location.href='/etf-research/exposure?ticker=QQQ'">QQQ</button>
+                <button onclick="window.location.href='/etf-research/exposure?ticker=IWM'">IWM</button>
+                <button onclick="window.location.href='/etf-research/exposure?ticker=XLF'">XLF</button>
             </div>
-            {'<p style="color: red;">Error: ' + error + '</p>' if error else ''}
-            {'<p>No data available for ticker ' + ticker + '</p>' if not error and not data else ''}
-            <table border='1' {'style="display: none;"' if not data else ''} id="exposureTable">
+            {f'<p style="color: red;">Error: {error}</p>' if error else ''}
+            {f'<p>No data available for ticker {ticker}</p>' if not error and not data else ''}
+            <table border='1' {f'style="display: none;"' if not data else ''} id="exposureTable">
                 <tr>
                     <th>ETF</th>
                     <th>Full Name</th>
@@ -147,8 +147,8 @@ def etf_holdings():
     <div style="display: flex; flex-wrap: wrap;">
         <div style="flex: 1; min-width: 300px; margin-bottom: 20px;">
             <h2>ETF Info for {ticker}</h2>
-            {'<p style="color: red;">Error fetching ETF Info: ' + etf_info_error + '</p>' if etf_info_error else ''}
-            <table border='1' {'style="display: none;"' if not etf_info else ''} id="etfInfoTable">
+            {f'<p style="color: red;">Error fetching ETF Info: {etf_info_error}</p>' if etf_info_error else ''}
+            <table border='1' {f'style="display: none;"' if not etf_info else ''} id="etfInfoTable">
                 <tr><th>Field</th><th>Value</th></tr>
     """
     if etf_info:  # Check if etf_info is not None or empty
@@ -166,14 +166,14 @@ def etf_holdings():
             </form>
             <h3>Or Click a Predefined ETF:</h3>
             <div>
-                <button onclick="window.location.href'/etf-research/holdings?ticker=SPY'">SPY</button>
-                <button onclick="window.location.href'/etf-research/holdings?ticker=QQQ'">QQQ</button>
+                <button onclick="window.location.href='/etf-research/holdings?ticker=SPY'">SPY</button>
+                <button onclick="window.location.href='/etf-research/holdings?ticker=QQQ'">QQQ</button>
                 <button onclick="window.location.href'/etf-research/holdings?ticker=IWM'">IWM</button>
                 <button onclick="window.location.href'/etf-research/holdings?ticker=XLF'">XLF</button>
             </div>
-            {'<p style="color: red;">Error: ' + error + '</p>' if error else ''}
-            {'<p>No data available for ticker ' + ticker + '</p>' if not error and not data else ''}
-            <table border='1' {'style="display: none;"' if not data else ''} id="holdingsTable">
+            {f'<p style="color: red;">Error: {error}</p>' if error else ''}
+            {f'<p>No data available for ticker {ticker}</p>' if not error and not data else ''}
+            <table border='1' {f'style="display: none;"' if not data else ''} id="holdingsTable">
                 <tr>
                     <th>Ticker</th>
                     <th>Name</th>
@@ -227,6 +227,7 @@ def etf_in_outflow():
 
     if ticker:
         response = get_api_data(ETF_INOUTFLOW_API_URL.format(ticker=ticker))
+        print(f"ETF In-Out Flow API Response for {ticker}: {response}")  # Log the full response for debugging
         if "error" in response:
             error = response["error"]
         else:
@@ -234,12 +235,17 @@ def etf_in_outflow():
             if not isinstance(data, list):  # Ensure data is a list
                 error = f"Unexpected API response format: data is not a list, got {type(data)}"
                 data = None
+            else:
+                # Debug: Print the structure of the first item to understand the keys
+                if data:
+                    print(f"First data item structure: {data[0]}")
 
     # Fetch ETF Info for the info bar
     etf_info = None
     etf_info_error = None
     if ticker:
         etf_info_response = get_api_data(ETF_INFO_API_URL.format(ticker=ticker))
+        print(f"ETF Info API Response for {ticker}: {etf_info_response}")  # Log the full response
         if "error" in etf_info_response:
             etf_info_error = etf_info_response["error"]
         else:
@@ -251,8 +257,8 @@ def etf_in_outflow():
     <div style="display: flex; flex-wrap: wrap;">
         <div style="flex: 1; min-width: 300px; margin-bottom: 20px;">
             <h2>ETF Info for {ticker}</h2>
-            {'<p style="color: red;">Error fetching ETF Info: ' + etf_info_error + '</p>' if etf_info_error else ''}
-            <table border='1' {'style="display: none;"' if not etf_info else ''} id="etfInfoTable">
+            {f'<p style="color: red;">Error fetching ETF Info: {etf_info_error}</p>' if etf_info_error else ''}
+            <table border='1' {f'style="display: none;"' if not etf_info else ''} id="etfInfoTable">
                 <tr><th>Field</th><th>Value</th></tr>
     """
     if etf_info:  # Check if etf_info is not None or empty
@@ -271,13 +277,13 @@ def etf_in_outflow():
             <h3>Or Click a Predefined ETF:</h3>
             <div>
                 <button onclick="window.location.href='/etf-research/in-outflow?ticker=SPY'">SPY</button>
-                <button onclick="window.location.href'/etf-research/in-outflow?ticker=QQQ'">QQQ</button>
-                <button onclick="window.location.href'/etf-research/in-outflow?ticker=IWM'">IWM</button>
-                <button onclick="window.location.href'/etf-research/in-outflow?ticker=XLF'">XLF</button>
+                <button onclick="window.location.href='/etf-research/in-outflow?ticker=QQQ'">QQQ</button>
+                <button onclick="window.location.href='/etf-research/in-outflow?ticker=IWM'">IWM</button>
+                <button onclick="window.location.href='/etf-research/in-outflow?ticker=XLF'">XLF</button>
             </div>
-            {'<p style="color: red;">Error: ' + error + '</p>' if error else ''}
-            {'<p>No data available for ticker ' + ticker + '</p>' if not error and not data else ''}
-            <table border='1' {'style="display: none;"' if not data else ''} id="inOutflowTable">
+            {f'<p style="color: red;">Error: {error}</p>' if error else ''}
+            {f'<p>No data available for ticker {ticker}</p>' if not error and not data else ''}
+            <table border='1' {f'style="display: none;"' if not data else ''} id="inOutflowTable">
                 <tr>
                     <th>Date</th>
                     <th>Inflow</th>
@@ -289,9 +295,21 @@ def etf_in_outflow():
         for item in data:
             # Use .get() with fallback values for missing or None fields to prevent KeyError
             date = item.get('date', 'N/A')
-            inflow = item.get('inflow', 'N/A')
-            outflow = item.get('outflow', 'N/A')
-            net_flow = item.get('net_flow', 'N/A')
+            inflow = item.get('inflow', 'N/A')  # Fallback to 'N/A' if 'inflow' is missing
+            outflow = item.get('outflow', 'N/A')  # Fallback to 'N/A' if 'outflow' is missing
+            net_flow = item.get('net_flow', 'N/A')  # Fallback to 'N/A' if 'net_flow' is missing
+
+            # Attempt to format numeric values if they exist and are not 'N/A'
+            try:
+                if inflow != 'N/A':
+                    inflow = f"{float(inflow):,.2f}"  # Format as number with commas and 2 decimals
+                if outflow != 'N/A':
+                    outflow = f"{float(outflow):,.2f}"
+                if net_flow != 'N/A':
+                    net_flow = f"{float(net_flow):,.2f}"
+            except (ValueError, TypeError):
+                pass  # Keep as 'N/A' if conversion fails
+
             html += f"""
             <tr>
                 <td>{date}</td>
