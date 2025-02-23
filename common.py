@@ -2,7 +2,7 @@ import os
 from flask import Flask, render_template_string, request, jsonify
 import requests
 import json
-import yfinance as yf
+import yfinance as yf  # Ensure yfinance is imported with alias 'yf'
 
 # API configuration
 APIKEY = "bd0cf36c-5072-4b1e-87ee-7e278b8a02e5"
@@ -43,4 +43,3 @@ MENU_BAR = """
     <a href="/seasonality" style="margin-right: 20px;">Seasonality</a>
     <a href="/etf-research" style="margin-right: 20px;">ETF-Research</a>
 </div>
-"""
