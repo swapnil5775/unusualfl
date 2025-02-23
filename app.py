@@ -71,7 +71,10 @@ def institution_list():
         institutions = data.get("data", []) if isinstance(data, dict) else data
         for inst in institutions:
             name = inst if isinstance(inst, str) else inst.get('name', 'N/A')
-            html += f"<tr><td><a href='#' onclick='showHoldings(\"{name}\")'>{name}</a></td><td>{get_live_stock_price(name)}</td></tr>"
+            # Use name as ticker if it's a valid ticker; otherwise, handle appropriately
+            html += f"<tr><td><a href='#' onclick='showHoldings(\"{name}\")'>{name}</a></td><td>{get_live_stock_price(name) if name.isupper() else 'N/A'}</td></tr>"
+    else:
+        html += f"<tr><td colspan='2'>Error: {data['error']}</td></tr>"
     html += """
         </table>
         <div id="holdingsContainer" class="holdings-table">
@@ -84,12 +87,13 @@ def institution_list():
             fetch(`/institution/holdings?name=${encodeURIComponent(name)}`)
                 .then(response => response.json())
                 .then(data => {
-                    let table = '<tr><th>Ticker</th><th>Units</th><th>Value</th></tr>';
+                    let table = '<tr><th>Ticker</th><th>Units</th><th>Value</th></th><th>Live Price</th></tr>';
                     if (data.data) {
                         data.data.forEach(holding => {
                             table += '<tr><td>' + (holding.ticker || 'N/A') + '</td><td>' + 
                                     (holding.units || 'N/A') + '</td><td>' + 
-                                    (holding.value || 'N/A') + '</td></tr>';
+                                    (holding.value || 'N/A') + '</td><td>' + 
+                                    (get_live_stock_price(holding.ticker) || 'N/A') + '</td></tr>';
                         });
                     }
                     document.getElementById('holdingsTable').innerHTML = table;
@@ -163,56 +167,57 @@ def research():
         ticker_options += f"<option value='{ticker}'>{ticker}</option>"
     table_html += "</table>"
 
-    chart_html = f"""
+    # Pie Chart HTML for Holdings
+    pie_chart_html = f"""
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <select id="tickerSelect" onchange="updateChart()">
-        <option value="">Select a Ticker</option>
-        {ticker_options}
+    <select id="institutionSelect" onchange="updatePieChart()">
+        <option value="">Select an Institution</option>
+    """
+    for name in inst_names:
+        pie_chart_html += f"<option value='{name}'>{name}</option>"
+    pie_chart_html += """
     </select>
-    <canvas id="holdingsChart" width="600" height="300"></canvas>
+    <canvas id="holdingsPieChart" width="400" height="400"></canvas>
     <script>
-        const holdingsData = {json.dumps(holdings_master)};
-        let chart;
+        const holdingsDataMaster = {json.dumps(holdings_master)};
+        let pieChart;
 
-        function updateChart() {{
-            const ticker = document.getElementById('tickerSelect').value;
-            if (!ticker) return;
+        function updatePieChart() {
+            const institution = document.getElementById('institutionSelect').value;
+            if (!institution) return;
 
-            const ctx = document.getElementById('holdingsChart').getContext('2d');
-            const data = holdingsData[ticker] || {{}};
-            const allLabels = Object.keys(data);
-            const allValues = Object.values(data);
-            const sortedData = allLabels.map((label, idx) => ({{ label: label, value: allValues[idx] }}))
-                .sort((a, b) => b.value - a.value)
-                .slice(0, 10);
-            const labels = sortedData.map(d => d.label);
-            const values = sortedData.map(d => d.value);
+            const holdings = holdingsDataMaster[institution] || {};
+            const labels = Object.keys(holdings);
+            const data = Object.values(holdings);
 
-            if (chart) chart.destroy();
-            chart = new Chart(ctx, {{
-                type: 'bar',
-                data: {{
+            if (pieChart) pieChart.destroy();
+            const ctx = document.getElementById('holdingsPieChart').getContext('2d');
+            pieChart = new Chart(ctx, {
+                type: 'pie',
+                data: {
                     labels: labels,
-                    datasets: [{{
-                        label: 'Units Held',
-                        data: values,
-                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                        borderColor: 'rgba(75, 192, 192, 1)',
-                        borderWidth: 1
-                    }}]
-                }},
-                options: {{
-                    indexAxis: 'y',
-                    scales: {{
-                        x: {{ beginAtZero: true, title: {{ display: true, text: 'Units Held' }} }},
-                        y: {{ title: {{ display: true, text: 'Institution' }} }}
-                    }},
-                    plugins: {{
-                        legend: {{ display: false }}
-                    }}
-                }}
-            }});
-        }}
+                    datasets: [{
+                        data: data,
+                        backgroundColor: [
+                            'rgba(255, 99, 132, 0.7)',
+                            'rgba(54, 162, 235, 0.7)',
+                            'rgba(255, 206, 86, 0.7)',
+                            'rgba(75, 192, 192, 0.7)',
+                            'rgba(153, 102, 255, 0.7)',
+                            'rgba(255, 159, 64, 0.7)'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { position: 'right' },
+                        title: { display: true, text: `Holdings for ${institution}` }
+                    }
+                }
+            });
+        }
     </script>
     """
 
@@ -222,7 +227,7 @@ def research():
     <h2>All Institution Holdings</h2>
     {table_html}
     <h2>Top 10 Holdings by Institution</h2>
-    {chart_html}
+    {pie_chart_html}
     """
     return render_template_string(html)
 
@@ -246,8 +251,11 @@ def seasonality_per_ticker():
     yearly_monthly_data = None
     monthly_error = None
     yearly_monthly_error = None
+    yearly_performance = None
+    yearly_prices = None
 
     if ticker:
+        # Fetch monthly seasonality data
         monthly_url = SEASONALITY_API_URL.format(ticker=ticker)
         monthly_response = get_api_data(monthly_url)
         if "error" in monthly_response:
@@ -255,12 +263,28 @@ def seasonality_per_ticker():
         else:
             monthly_data = monthly_response.get("data", [])
 
+        # Fetch year-month seasonality data
         yearly_monthly_url = f"https://api.unusualwhales.com/api/seasonality/{ticker}/year-month"
         yearly_monthly_response = get_api_data(yearly_monthly_url)
         if "error" in yearly_monthly_response:
             yearly_monthly_error = yearly_monthly_response["error"]
         else:
             yearly_monthly_data = yearly_monthly_response.get("data", [])
+
+        # Fetch yearly performance and prices for charts
+        try:
+            stock = yf.Ticker(ticker)
+            hist = stock.history(period="max", interval="1mo")
+            yearly_performance = hist['Close'].resample('Y').last().pct_change().dropna() * 100
+            yearly_performance = yearly_performance.to_dict()
+            years = [dt.strftime('%Y') for dt in yearly_performance.keys()]
+            performance_values = list(yearly_performance.values())
+            yearly_prices = hist['Close'].resample('Y').last().dropna().to_dict()
+            price_years = [dt.strftime('%Y') for dt in yearly_prices.keys()]
+            price_values = list(yearly_prices.values())
+        except Exception as e:
+            yearly_performance = {"error": f"Error fetching performance: {str(e)}"}
+            yearly_prices = {"error": f"Error fetching prices: {str(e)}"}
 
     html = f"""
     <h1>Seasonality - Per Ticker</h1>
@@ -315,7 +339,146 @@ def seasonality_per_ticker():
             """
     html += """
         </table>
+    """
 
+    # Add Yearly Charts between Monthly and 15-Year Monthly Return History
+    if ticker and yearly_performance and "error" not in yearly_performance and yearly_prices and "error" not in yearly_prices:
+        common_years = list(set(years) & set(price_years))
+        common_years.sort()
+        performance_values_filtered = [performance_values[years.index(year)] for year in common_years if year in years]
+        price_values_filtered = [price_values[price_years.index(year)] for year in common_years if year in price_years]
+
+        html += f"""
+        <h2>Yearly Analysis for {ticker}</h2>
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-around; margin-top: 20px; gap: 20px;">
+            <div style="flex: 1; min-width: 300px; max-width: 400px;">
+                <h3>Price Action (Line)</h3>
+                <canvas id="yearlyPriceChart"></canvas>
+            </div>
+            <div style="flex: 1; min-width: 300px; max-width: 400px;">
+                <h3>Performance (Bar)</h3>
+                <canvas id="yearlyBarChart"></canvas>
+            </div>
+            <div style="flex: 1; min-width: 300px; max-width: 400px;">
+                <h3>Combined Performance & Price</h3>
+                <canvas id="combinedChart"></canvas>
+            </div>
+        </div>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <script>
+            // Price Action Line Chart
+            const priceCtx = document.getElementById('yearlyPriceChart').getContext('2d');
+            const priceChart = new Chart(priceCtx, {{
+                type: 'line',
+                data: {{
+                    labels: {json.dumps(common_years)},
+                    datasets: [{{
+                        label: 'Yearly Closing Price',
+                        data: {json.dumps(price_values_filtered)},
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 3
+                    }}]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    scales: {{
+                        x: {{ title: {{ display: true, text: 'Year' }}, ticks: {{ maxRotation: 45, minRotation: 45 }} }},
+                        y: {{ title: {{ display: true, text: 'Price ($)' }}, beginAtZero: true }}
+                    }},
+                    plugins: {{
+                        legend: {{ display: false }}
+                    }}
+                }}
+            }});
+
+            // Performance Bar Chart
+            const barCtx = document.getElementById('yearlyBarChart').getContext('2d');
+            const barChart = new Chart(barCtx, {{
+                type: 'bar',
+                data: {{
+                    labels: {json.dumps(common_years)},
+                    datasets: [{{
+                        label: 'Yearly % Change',
+                        data: {json.dumps(performance_values_filtered)},
+                        backgroundColor: {json.dumps([val >= 0 and 'rgba(75, 192, 192, 0.7)' or 'rgba(255, 99, 132, 0.7)' for val in performance_values_filtered])},
+                        borderColor: {json.dumps([val >= 0 and 'rgba(75, 192, 192, 1)' or 'rgba(255, 99, 132, 1)' for val in performance_values_filtered])},
+                        borderWidth: 1
+                    }}]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    scales: {{
+                        x: {{ title: {{ display: true, text: 'Year' }}, ticks: {{ maxRotation: 45, minRotation: 45 }} }},
+                        y: {{ title: {{ display: true, text: '%' }}, beginAtZero: true }}
+                    }},
+                    plugins: {{
+                        legend: {{ display: false }}
+                    }}
+                }}
+            }});
+
+            // Combined Chart (Price Line + Performance Bars)
+            const combinedCtx = document.getElementById('combinedChart').getContext('2d');
+            const combinedChart = new Chart(combinedCtx, {{
+                type: 'bar',
+                data: {{
+                    labels: {json.dumps(common_years)},
+                    datasets: [
+                        {{
+                            type: 'line',
+                            label: 'Yearly Closing Price',
+                            data: {json.dumps(price_values_filtered)},
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                            fill: true,
+                            tension: 0.3,
+                            pointRadius: 3,
+                            yAxisID: 'y2'  // Right y-axis for price
+                        }},
+                        {{
+                            type: 'bar',
+                            label: 'Yearly % Change',
+                            data: {json.dumps(performance_values_filtered)},
+                            backgroundColor: {json.dumps([val >= 0 and 'rgba(75, 192, 192, 0.7)' or 'rgba(255, 99, 132, 0.7)' for val in performance_values_filtered])},
+                            borderColor: {json.dumps([val >= 0 and 'rgba(75, 192, 192, 1)' or 'rgba(255, 99, 132, 1)' for val in performance_values_filtered])},
+                            borderWidth: 1,
+                            yAxisID: 'y1'  // Left y-axis for % change
+                        }}
+                    ]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    scales: {{
+                        x: {{ title: {{ display: true, text: 'Year' }}, ticks: {{ maxRotation: 45, minRotation: 45 }} }},
+                        y1: {{ 
+                            type: 'linear', 
+                            position: 'left', 
+                            title: {{ display: true, text: '%' }},
+                            beginAtZero: true
+                        }},
+                        y2: {{ 
+                            type: 'linear', 
+                            position: 'right', 
+                            title: {{ display: true, text: 'Price ($)' }},
+                            beginAtZero: true,
+                            grid: {{ drawOnChartArea: false }}  // Hide grid lines for right y-axis to avoid overlap
+                        }}
+                    }},
+                    plugins: {{
+                        legend: {{ display: true, position: 'top' }}
+                    }}
+                }}
+            }});
+        </script>
+        """
+
+    html += """
         <h2>15-Year Monthly Return History</h2>
         <table border='1' {'style="display: none;"' if not yearly_monthly_data else ''} id="yearlyMonthlySeasonalityTable">
             <tr>
@@ -425,7 +588,7 @@ def seasonality_etf_market():
     """
     for t in etf_tickers:
         html += f"""
-            <button onclick="window.location.href'/seasonality/etf-market?ticker={t}'">{t}</button>
+            <button onclick="window.location.href='/seasonality/etf-market?ticker={t}'">{t}</button>
         """
     html += """
         </div>
