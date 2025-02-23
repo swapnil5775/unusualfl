@@ -368,7 +368,7 @@ def seasonality_per_ticker():
         if "error" in etf_info_response:
             etf_info_error = etf_info_response["error"]
         else:
-            etf_info = etf_info_response.get("data", [])
+            etf_info = etf_info_response.get("data", {})  # Get the dictionary under "data"
 
     # Serialize JSON data for JavaScript
     common_years = []
@@ -390,9 +390,8 @@ def seasonality_per_ticker():
             <table border='1' {'style="display: none;"' if not etf_info else ''} id="etfInfoTable">
                 <tr><th>Field</th><th>Value</th></tr>
     """
-    if etf_info and len(etf_info) > 0:
-        info = etf_info[0]  # Assuming the first item contains the ETF info
-        for key, value in info.items():
+    if etf_info:  # Check if etf_info is not None or empty
+        for key, value in etf_info.items():
             if value is not None:  # Skip None values
                 html += f"<tr><td>{key.replace('_', ' ').title()}</td><td>{value}</td></tr>"
     html += """
@@ -693,7 +692,7 @@ def seasonality_etf_market():
         if "error" in etf_info_response:
             etf_info_error = etf_info_response["error"]
         else:
-            etf_info = etf_info_response.get("data", [])
+            etf_info = etf_info_response.get("data", {})  # Get the dictionary under "data"
 
     # Serialize JSON data for JavaScript
     common_years = []
@@ -717,9 +716,8 @@ def seasonality_etf_market():
             <table border='1' {'style="display: none;"' if not etf_info or ticker == 'ALL' else ''} id="etfInfoTable">
                 <tr><th>Field</th><th>Value</th></tr>
     """
-    if etf_info and len(etf_info) > 0 and ticker != 'ALL':
-        info = etf_info[0]  # Assuming the first item contains the ETF info
-        for key, value in info.items():
+    if etf_info and ticker != 'ALL':  # Check if etf_info is not None or empty and ticker is not 'ALL'
+        for key, value in etf_info.items():
             if value is not None:  # Skip None values
                 html += f"<tr><td>{key.replace('_', ' ').title()}</td><td>{value}</td></tr>"
     html += """
@@ -732,7 +730,7 @@ def seasonality_etf_market():
     """
     for t in etf_tickers:
         html += f"""
-            <button onclick="window.location.href='/seasonality/etf-market?ticker={t}'">{t}</button>
+            <button onclick="window.location.href'/seasonality/etf-market?ticker={t}'">{t}</button>
         """
     html += """
             </div>
@@ -1011,7 +1009,7 @@ def etf_exposure():
         if "error" in etf_info_response:
             etf_info_error = etf_info_response["error"]
         else:
-            etf_info = etf_info_response.get("data", [])
+            etf_info = etf_info_response.get("data", {})  # Get the dictionary under "data"
 
     html = f"""
     <h1>ETF-Research - Exposure</h1>
@@ -1023,9 +1021,8 @@ def etf_exposure():
             <table border='1' {'style="display: none;"' if not etf_info else ''} id="etfInfoTable">
                 <tr><th>Field</th><th>Value</th></tr>
     """
-    if etf_info and len(etf_info) > 0:
-        info = etf_info[0]  # Assuming the first item contains the ETF info
-        for key, value in info.items():
+    if etf_info:  # Check if etf_info is not None or empty
+        for key, value in etf_info.items():
             if value is not None:  # Skip None values
                 html += f"<tr><td>{key.replace('_', ' ').title()}</td><td>{value}</td></tr>"
     html += """
@@ -1039,10 +1036,10 @@ def etf_exposure():
             </form>
             <h3>Or Click a Predefined ETF:</h3>
             <div>
-                <button onclick="window.location.href='/etf-research/exposure?ticker=SPY'">SPY</button>
-                <button onclick="window.location.href='/etf-research/exposure?ticker=QQQ'">QQQ</button>
-                <button onclick="window.location.href='/etf-research/exposure?ticker=IWM'">IWM</button>
-                <button onclick="window.location.href='/etf-research/exposure?ticker=XLF'">XLF</button>
+                <button onclick="window.location.href'/etf-research/exposure?ticker=SPY'">SPY</button>
+                <button onclick="window.location.href'/etf-research/exposure?ticker=QQQ'">QQQ</button>
+                <button onclick="window.location.href'/etf-research/exposure?ticker=IWM'">IWM</button>
+                <button onclick="window.location.href'/etf-research/exposure?ticker=XLF'">XLF</button>
             </div>
             {'<p style="color: red;">Error: ' + error + '</p>' if error else ''}
             {'<p>No data available for ticker ' + ticker + '</p>' if not error and not data else ''}
@@ -1108,7 +1105,7 @@ def etf_holdings():
         if "error" in etf_info_response:
             etf_info_error = etf_info_response["error"]
         else:
-            etf_info = etf_info_response.get("data", [])
+            etf_info = etf_info_response.get("data", {})  # Get the dictionary under "data"
 
     html = f"""
     <h1>ETF-Research - Holdings</h1>
@@ -1120,9 +1117,8 @@ def etf_holdings():
             <table border='1' {'style="display: none;"' if not etf_info else ''} id="etfInfoTable">
                 <tr><th>Field</th><th>Value</th></tr>
     """
-    if etf_info and len(etf_info) > 0:
-        info = etf_info[0]  # Assuming the first item contains the ETF info
-        for key, value in info.items():
+    if etf_info:  # Check if etf_info is not None or empty
+        for key, value in etf_info.items():
             if value is not None:  # Skip None values
                 html += f"<tr><td>{key.replace('_', ' ').title()}</td><td>{value}</td></tr>"
     html += """
@@ -1136,8 +1132,8 @@ def etf_holdings():
             </form>
             <h3>Or Click a Predefined ETF:</h3>
             <div>
-                <button onclick="window.location.href='/etf-research/holdings?ticker=SPY'">SPY</button>
-                <button onclick="window.location.href='/etf-research/holdings?ticker=QQQ'">QQQ</button>
+                <button onclick="window.location.href'/etf-research/holdings?ticker=SPY'">SPY</button>
+                <button onclick="window.location.href'/etf-research/holdings?ticker=QQQ'">QQQ</button>
                 <button onclick="window.location.href'/etf-research/holdings?ticker=IWM'">IWM</button>
                 <button onclick="window.location.href'/etf-research/holdings?ticker=XLF'">XLF</button>
             </div>
@@ -1210,7 +1206,7 @@ def etf_in_outflow():
         if "error" in etf_info_response:
             etf_info_error = etf_info_response["error"]
         else:
-            etf_info = etf_info_response.get("data", [])
+            etf_info = etf_info_response.get("data", {})  # Get the dictionary under "data"
 
     html = f"""
     <h1>ETF-Research - In-Out Flow</h1>
@@ -1222,9 +1218,8 @@ def etf_in_outflow():
             <table border='1' {'style="display: none;"' if not etf_info else ''} id="etfInfoTable">
                 <tr><th>Field</th><th>Value</th></tr>
     """
-    if etf_info and len(etf_info) > 0:
-        info = etf_info[0]  # Assuming the first item contains the ETF info
-        for key, value in info.items():
+    if etf_info:  # Check if etf_info is not None or empty
+        for key, value in etf_info.items():
             if value is not None:  # Skip None values
                 html += f"<tr><td>{key.replace('_', ' ').title()}</td><td>{value}</td></tr>"
     html += """
@@ -1238,10 +1233,10 @@ def etf_in_outflow():
             </form>
             <h3>Or Click a Predefined ETF:</h3>
             <div>
-                <button onclick="window.location.href='/etf-research/in-outflow?ticker=SPY'">SPY</button>
-                <button onclick="window.location.href='/etf-research/in-outflow?ticker=QQQ'">QQQ</button>
-                <button onclick="window.location.href='/etf-research/in-outflow?ticker=IWM'">IWM</button>
-                <button onclick="window.location.href='/etf-research/in-outflow?ticker=XLF'">XLF</button>
+                <button onclick="window.location.href'/etf-research/in-outflow?ticker=SPY'">SPY</button>
+                <button onclick="window.location.href'/etf-research/in-outflow?ticker=QQQ'">QQQ</button>
+                <button onclick="window.location.href'/etf-research/in-outflow?ticker=IWM'">IWM</button>
+                <button onclick="window.location.href'/etf-research/in-outflow?ticker=XLF'">XLF</button>
             </div>
             {'<p style="color: red;">Error: ' + error + '</p>' if error else ''}
             {'<p>No data available for ticker ' + ticker + '</p>' if not error and not data else ''}
