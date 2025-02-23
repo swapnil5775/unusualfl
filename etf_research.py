@@ -71,7 +71,7 @@ def etf_exposure():
             <h3>Or Click a Predefined ETF:</h3>
             <div>
                 <button onclick="window.location.href='/etf-research/exposure?ticker=SPY'">SPY</button>
-                <button onclick="window.location.href='/etf-research/exposure?ticker=QQQ'">QQQ</button>
+                <button onclick="window.location.href'/etf-research/exposure?ticker=QQQ'">QQQ</button>
                 <button onclick="window.location.href'/etf-research/exposure?ticker=IWM'">IWM</button>
                 <button onclick="window.location.href'/etf-research/exposure?ticker=XLF'">XLF</button>
             </div>
@@ -166,7 +166,7 @@ def etf_holdings():
             </form>
             <h3>Or Click a Predefined ETF:</h3>
             <div>
-                <button onclick="window.location.href='/etf-research/holdings?ticker=SPY'">SPY</button>
+                <button onclick="window.location.href'/etf-research/holdings?ticker=SPY'">SPY</button>
                 <button onclick="window.location.href'/etf-research/holdings?ticker=QQQ'">QQQ</button>
                 <button onclick="window.location.href'/etf-research/holdings?ticker=IWM'">IWM</button>
                 <button onclick="window.location.href'/etf-research/holdings?ticker=XLF'">XLF</button>
@@ -231,6 +231,9 @@ def etf_in_outflow():
             error = response["error"]
         else:
             data = response.get("data", [])
+            if not isinstance(data, list):  # Ensure data is a list
+                error = f"Unexpected API response format: data is not a list, got {type(data)}"
+                data = None
 
     # Fetch ETF Info for the info bar
     etf_info = None
@@ -268,9 +271,9 @@ def etf_in_outflow():
             <h3>Or Click a Predefined ETF:</h3>
             <div>
                 <button onclick="window.location.href='/etf-research/in-outflow?ticker=SPY'">SPY</button>
-                <button onclick="window.location.href='/etf-research/in-outflow?ticker=QQQ'">QQQ</button>
-                <button onclick="window.location.href='/etf-research/in-outflow?ticker=IWM'">IWM</button>
-                <button onclick="window.location.href='/etf-research/in-outflow?ticker=XLF'">XLF</button>
+                <button onclick="window.location.href'/etf-research/in-outflow?ticker=QQQ'">QQQ</button>
+                <button onclick="window.location.href'/etf-research/in-outflow?ticker=IWM'">IWM</button>
+                <button onclick="window.location.href'/etf-research/in-outflow?ticker=XLF'">XLF</button>
             </div>
             {'<p style="color: red;">Error: ' + error + '</p>' if error else ''}
             {'<p>No data available for ticker ' + ticker + '</p>' if not error and not data else ''}
@@ -284,12 +287,17 @@ def etf_in_outflow():
     """
     if data:
         for item in data:
+            # Use .get() with fallback values for missing or None fields to prevent KeyError
+            date = item.get('date', 'N/A')
+            inflow = item.get('inflow', 'N/A')
+            outflow = item.get('outflow', 'N/A')
+            net_flow = item.get('net_flow', 'N/A')
             html += f"""
             <tr>
-                <td>{item['date']}</td>
-                <td>{item['inflow']}</td>
-                <td>{item['outflow']}</td>
-                <td>{item['net_flow']}</td>
+                <td>{date}</td>
+                <td>{inflow}</td>
+                <td>{outflow}</td>
+                <td>{net_flow}</td>
             </tr>
             """
     html += """
