@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template_string
-from common import get_api_data, get_live_stock_price, MENU_BAR
+from common import get_api_data, get_live_stock_price, MENU_BAR, INST_LIST_API_URL, INST_HOLDINGS_API_URL
 
 research_bp = Blueprint('research', __name__, url_prefix='/')
 
