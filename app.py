@@ -1138,8 +1138,8 @@ def etf_holdings():
             <div>
                 <button onclick="window.location.href='/etf-research/holdings?ticker=SPY'">SPY</button>
                 <button onclick="window.location.href='/etf-research/holdings?ticker=QQQ'">QQQ</button>
-                <button onclick="window.location.href='/etf-research/holdings?ticker=IWM'">IWM</button>
-                <button onclick="window.location.href='/etf-research/holdings?ticker=XLF'">XLF</button>
+                <button onclick="window.location.href'/etf-research/holdings?ticker=IWM'">IWM</button>
+                <button onclick="window.location.href'/etf-research/holdings?ticker=XLF'">XLF</button>
             </div>
             {'<p style="color: red;">Error: ' + error + '</p>' if error else ''}
             {'<p>No data available for ticker ' + ticker + '</p>' if not error and not data else ''}
@@ -1154,18 +1154,31 @@ def etf_holdings():
     """
     if data:
         for item in data:
-            # Add fallback values for missing keys to prevent KeyError
+            # Use .get() with fallback values for missing or None fields
             ticker_val = item.get('ticker', 'N/A')
             name = item.get('name', 'N/A')
             shares = item.get('shares', 'N/A')
             weight = item.get('weight', 'N/A')
             market_value = item.get('market_value', 'N/A')
+
+            # Safely convert weight to float if it's a string or number, or keep as 'N/A'
+            try:
+                weight = float(weight) if weight and weight != 'N/A' else 'N/A'
+            except (ValueError, TypeError):
+                weight = 'N/A'
+
+            # Safely convert shares to a string if it's a number, or keep as 'N/A'
+            try:
+                shares = str(shares) if shares and shares != 'N/A' else 'N/A'
+            except (ValueError, TypeError):
+                shares = 'N/A'
+
             html += f"""
             <tr>
                 <td>{ticker_val}</td>
                 <td>{name}</td>
                 <td>{shares}</td>
-                <td>{float(weight) if weight and weight != 'N/A' else 'N/A'}%</td>
+                <td>{weight:.2f}%</td>  <!-- Format weight as percentage if it's a number -->
                 <td>{market_value}</td>
             </tr>
             """
