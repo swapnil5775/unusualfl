@@ -2,7 +2,6 @@ import os
 from flask import Flask, render_template_string, request, jsonify
 import requests
 import json
-import openai as ai
 import yfinance as yf  # Ensure yfinance is imported with alias 'yf'
 
 # API configuration
