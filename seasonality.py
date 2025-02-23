@@ -58,7 +58,7 @@ def seasonality_per_ticker():
             yearly_performance = {"error": f"Error fetching performance: {str(e)}"}
             yearly_prices = {"error": f"Error fetching prices: {str(e)}"}
 
-    # Fetch ETF Info for the info bar
+    # Fetch ETF Info for the info bar (optional, only if ticker is valid)
     etf_info = None
     etf_info_error = None
     if ticker:
@@ -78,15 +78,15 @@ def seasonality_per_ticker():
         performance_values_filtered = [performance_values[years.index(year)] for year in common_years if year in years]
         price_values_filtered = [price_values[price_years.index(year)] for year in common_years if year in price_years]
 
-    # Build HTML with proper conditional rendering
+    # Build HTML with proper Jinja2 syntax for render_template_string
     html = f"""
     <h1>Seasonality - Per Ticker</h1>
     {MENU_BAR}
     <div style="display: flex; flex-wrap: wrap;">
         <div style="flex: 1; min-width: 300px; margin-bottom: 20px;">
             <h2>ETF Info for {ticker or ''}</h2>
-            {'<p style="color: red;">Error fetching ETF Info: {etf_info_error}</p>' if etf_info_error else ''}
-            <table border='1' {'style="display: none;"' if not etf_info else ''} id="etfInfoTable">
+            {% if etf_info_error %}<p style="color: red;">Error fetching ETF Info: {{ etf_info_error }}</p>{% endif %}
+            <table border='1' {% if not etf_info %}style="display: none;"{% endif %} id="etfInfoTable">
                 <tr><th>Field</th><th>Value</th></tr>
     """
     if etf_info:
@@ -99,16 +99,16 @@ def seasonality_per_ticker():
         <div style="flex: 2; min-width: 300px;">
             <form method="GET">
                 <label>Enter Ticker (e.g., AAPL, TSLA, PLTR): </label>
-                <input type="text" name="ticker" value="{ticker}" placeholder="Enter ticker symbol">
+                <input type="text" name="ticker" value="{{ ticker }}" placeholder="Enter ticker symbol">
                 <button type="submit">GO</button>
             </form>
-            {f'<p style="color: red;">Error (Monthly Data): {monthly_error}</p>' if monthly_error else ''}
-            {f'<p style="color: red;">Error (Year-Month Data): {yearly_monthly_error}</p>' if yearly_monthly_error else ''}
-            {f'<p>No monthly data available for ticker {ticker}</p>' if not monthly_error and not monthly_data else ''}
-            {f'<p>No year-month data available for ticker {ticker}</p>' if not yearly_monthly_error and not yearly_monthly_data else ''}
+            {% if monthly_error %}<p style="color: red;">Error (Monthly Data): {{ monthly_error }}</p>{% endif %}
+            {% if yearly_monthly_error %}<p style="color: red;">Error (Year-Month Data): {{ yearly_monthly_error }}</p>{% endif %}
+            {% if not monthly_error and not monthly_data %}<p>No monthly data available for ticker {{ ticker or '' }}</p>{% endif %}
+            {% if not yearly_monthly_error and not yearly_monthly_data %}<p>No year-month data available for ticker {{ ticker or '' }}</p>{% endif %}
 
             <h2>Monthly Seasonality Statistics</h2>
-            <table border='1' {'style="display: none;"' if not monthly_data else ''} id="monthlySeasonalityTable">
+            <table border='1' {% if not monthly_data %}style="display: none;"{% endif %} id="monthlySeasonalityTable">
                 <tr>
                     <th><a href="#" onclick="sortTable('month', 'monthly')">Month</a></th>
                     <th><a href="#" onclick="sortTable('avg_change', 'monthly')">Avg Change</a></th>
@@ -122,11 +122,14 @@ def seasonality_per_ticker():
     """
     if monthly_data:
         for item in monthly_data:
-            avg_change = item['avg_change']
-            max_change = item['max_change']
-            median_change = item['median_change']
-            min_change = item['min_change']
-            positive_months_perc = item['positive_months_perc'] * 100
+            avg_change = item.get('avg_change', 0.0)  # Use .get() with fallback
+            max_change = item.get('max_change', 0.0)
+            median_change = item.get('median_change', 0.0)
+            min_change = item.get('min_change', 0.0)
+            positive_months_perc = item.get('positive_months_perc', 0.0) * 100
+            positive_closes = item.get('positive_closes', 0)
+            years = item.get('years', 'N/A')
+            month = item.get('month', 'N/A')
 
             def format_with_color(value, decimals=2):
                 color = 'red' if value < 0 else 'black'
@@ -134,14 +137,14 @@ def seasonality_per_ticker():
 
             html += f"""
             <tr>
-                <td>{item['month']}</td>
+                <td>{month}</td>
                 <td>{format_with_color(avg_change)}</td>
                 <td>{format_with_color(max_change)}</td>
                 <td>{format_with_color(median_change)}</td>
                 <td>{format_with_color(min_change)}</td>
-                <td>{item['positive_closes']}</td>
+                <td>{positive_closes}</td>
                 <td>{positive_months_perc:.2f}%</td>
-                <td>{item['years']}</td>
+                <td>{years}</td>
             </tr>
             """
     html += """
@@ -169,7 +172,7 @@ def seasonality_per_ticker():
 
     html += """
         <h2>15-Year Monthly Return History</h2>
-        <table border='1' {'style="display: none;"' if not yearly_monthly_data else ''} id="yearlyMonthlySeasonalityTable">
+        <table border='1' {% if not yearly_monthly_data %}style="display: none;"{% endif %} id="yearlyMonthlySeasonalityTable">
             <tr>
                 <th><a href="#" onclick="sortTable('year', 'yearly')">Year</a></th>
                 <th><a href="#" onclick="sortTable('month', 'yearly')">Month</a></th>
@@ -180,9 +183,11 @@ def seasonality_per_ticker():
     """
     if yearly_monthly_data:
         for item in yearly_monthly_data:
-            change = float(item['change']) if item['change'] else 0.0
-            open_price = float(item['open']) if item['open'] else 0.0
-            close_price = float(item['close']) if item['close'] else 0.0
+            change = float(item.get('change', 0.0)) if item.get('change') else 0.0
+            open_price = float(item.get('open', 0.0)) if item.get('open') else 0.0
+            close_price = float(item.get('close', 0.0)) if item.get('close') else 0.0
+            year = item.get('year', 'N/A')
+            month = item.get('month', 'N/A')
 
             def format_change_with_color(value, decimals=4):
                 color = 'red' if value < 0 else 'black'
@@ -190,8 +195,8 @@ def seasonality_per_ticker():
 
             html += f"""
             <tr>
-                <td>{item['year']}</td>
-                <td>{item['month']}</td>
+                <td>{year}</td>
+                <td>{month}</td>
                 <td>{open_price:.2f}</td>
                 <td>{close_price:.2f}</td>
                 <td>{format_change_with_color(change)}</td>
@@ -202,33 +207,33 @@ def seasonality_per_ticker():
     </div>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-        let sortStates = {{
-            monthly: {{ col: 'month', dir: 'asc' }},
-            yearly: {{ col: 'year', dir: 'asc' }}
-        }};
+        let sortStates = {
+            monthly: { col: 'month', dir: 'asc' },
+            yearly: { col: 'year', dir: 'asc' }
+        };
 
-        function sortTable(col, tableType) {{
+        function sortTable(col, tableType) {
             const current = sortStates[tableType];
             const newDir = current.col === col && current.dir === 'asc' ? 'desc' : 'asc';
-            sortStates[tableType] = {{ col: col, dir: newDir }};
+            sortStates[tableType] = { col: col, dir: newDir };
 
             let url = `/seasonality/per-ticker?ticker={ticker or ''}`;
-            if (tableType === 'monthly') {{
-                url += `&sort_col=${{col}}&sort_dir=${{newDir}}&table=monthly`;
-            }} else {{
-                url += `&sort_col=${{col}}&sort_dir=${{newDir}}&table=yearly`;
-            }}
+            if (tableType === 'monthly') {
+                url += `&sort_col=${col}&sort_dir=${newDir}&table=monthly`;
+            } else {
+                url += `&sort_col=${col}&sort_dir=${newDir}&table=yearly`;
+            }
             window.location.href = url;
-        }}
+        }
 
         const urlParams = new URLSearchParams(window.location.search);
         const sortCol = urlParams.get('sort_col');
         const sortDir = urlParams.get('sort_dir');
         const tableType = urlParams.get('table');
-        if (sortCol && sortDir && tableType) {{
+        if (sortCol && sortDir && tableType) {
             sortStates[tableType].col = sortCol;
             sortStates[tableType].dir = sortDir;
-        }}
+        }
 
         // Chart.js Data
         const commonYears = {json.dumps(common_years)};
@@ -239,9 +244,9 @@ def seasonality_per_ticker():
 
         // Price Action Line Chart
         const priceCtx = document.getElementById('yearlyPriceChart').getContext('2d');
-        new Chart(priceCtx, {{
+        new Chart(priceCtx, {
             type: 'line',
-            data: {{
+            data: {
                 labels: commonYears,
                 datasets: [{
                     label: 'Yearly Closing Price',
@@ -252,25 +257,25 @@ def seasonality_per_ticker():
                     tension: 0.3,
                     pointRadius: 3
                 }]
-            }},
-            options: {{
+            },
+            options: {
                 responsive: true,
                 maintainAspectRatio: true,
-                scales: {{
-                    x: {{ title: {{ display: true, text: 'Year' }}, ticks: {{ maxRotation: 45, minRotation: 45 }} }},
-                    y: {{ title: {{ display: true, text: 'Price ($)' }}, beginAtZero: true }}
-                }},
-                plugins: {{
-                    legend: {{ display: false }}
-                }}
-            }}
-        }});
+                scales: {
+                    x: { title: { display: true, text: 'Year' }, ticks: { maxRotation: 45, minRotation: 45 } },
+                    y: { title: { display: true, text: 'Price ($)' }, beginAtZero: true }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
 
         // Performance Bar Chart
         const barCtx = document.getElementById('yearlyBarChart').getContext('2d');
-        new Chart(barCtx, {{
+        new Chart(barCtx, {
             type: 'bar',
-            data: {{
+            data: {
                 labels: commonYears,
                 datasets: [{
                     label: 'Yearly % Change',
@@ -279,28 +284,28 @@ def seasonality_per_ticker():
                     borderColor: performanceBorderColors,
                     borderWidth: 1
                 }]
-            }},
-            options: {{
+            },
+            options: {
                 responsive: true,
                 maintainAspectRatio: true,
-                scales: {{
-                    x: {{ title: {{ display: true, text: 'Year' }}, ticks: {{ maxRotation: 45, minRotation: 45 }} }},
-                    y: {{ title: {{ display: true, text: '%' }}, beginAtZero: true }}
-                }},
-                plugins: {{
-                    legend: {{ display: false }}
-                }}
-            }}
-        }});
+                scales: {
+                    x: { title: { display: true, text: 'Year' }, ticks: { maxRotation: 45, minRotation: 45 } },
+                    y: { title: { display: true, text: '%' }, beginAtZero: true }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
 
         // Combined Chart (Price Line + Performance Bars)
         const combinedCtx = document.getElementById('combinedChart').getContext('2d');
-        new Chart(combinedCtx, {{
+        new Chart(combinedCtx, {
             type: 'bar',
-            data: {{
+            data: {
                 labels: commonYears,
                 datasets: [
-                    {{
+                    {
                         type: 'line',
                         label: 'Yearly Closing Price',
                         data: priceValuesFiltered,
@@ -310,8 +315,8 @@ def seasonality_per_ticker():
                         tension: 0.3,
                         pointRadius: 3,
                         yAxisID: 'y2'
-                    }},
-                    {{
+                    },
+                    {
                         type: 'bar',
                         label: 'Yearly % Change',
                         data: performanceValuesFiltered,
@@ -319,33 +324,33 @@ def seasonality_per_ticker():
                         borderColor: performanceBorderColors,
                         borderWidth: 1,
                         yAxisID: 'y1'
-                    }}
+                    }
                 ]
-            }},
-            options: {{
+            },
+            options: {
                 responsive: true,
                 maintainAspectRatio: true,
-                scales: {{
-                    x: {{ title: {{ display: true, text: 'Year' }}, ticks: {{ maxRotation: 45, minRotation: 45 }} }},
-                    y1: {{ 
+                scales: {
+                    x: { title: { display: true, text: 'Year' }, ticks: { maxRotation: 45, minRotation: 45 } },
+                    y1: { 
                         type: 'linear', 
                         position: 'left', 
-                        title: {{ display: true, text: '%' }},
+                        title: { display: true, text: '%' },
                         beginAtZero: true
-                    }},
-                    y2: {{ 
+                    },
+                    y2: { 
                         type: 'linear', 
                         position: 'right', 
-                        title: {{ display: true, text: 'Price ($)' }},
+                        title: { display: true, text: 'Price ($)' },
                         beginAtZero: true,
-                        grid: {{ drawOnChartArea: false }}
-                    }}
-                }},
-                plugins: {{
-                    legend: {{ display: true, position: 'top' }}
-                }}
-            }}
-        }});
+                        grid: { drawOnChartArea: false }
+                    }
+                },
+                plugins: {
+                    legend: { display: true, position: 'top' }
+                }
+            }
+        });
     </script>
     """
     return render_template_string(html)
@@ -383,7 +388,7 @@ def seasonality_etf_market():
             yearly_performance = {"error": f"Error fetching performance: {str(e)}"}
             yearly_prices = {"error": f"Error fetching prices: {str(e)}"}
 
-    # Fetch ETF Info for the info bar
+    # Fetch ETF Info for the info bar (optional, only if ticker is valid and not 'ALL')
     etf_info = None
     etf_info_error = None
     if ticker != 'ALL':
@@ -405,17 +410,18 @@ def seasonality_etf_market():
 
     etf_tickers = ['SPY', 'QQQ', 'IWM', 'XLE', 'XLC', 'XLK', 'XLV', 'XLP', 'XLY', 'XLRE', 'XLF', 'XLI', 'XLB']
 
+    # Build HTML with proper Jinja2 syntax for render_template_string
     html = f"""
     <h1>Seasonality - ETF Market</h1>
     {MENU_BAR}
     <div style="display: flex; flex-wrap: wrap;">
         <div style="flex: 1; min-width: 300px; margin-bottom: 20px;">
             <h2>ETF Info for {ticker if ticker != 'ALL' else ''}</h2>
-            {'<p style="color: red;">Error fetching ETF Info: {etf_info_error}</p>' if etf_info_error else ''}
-            <table border='1' {'style="display: none;"' if not etf_info or ticker == 'ALL' else ''} id="etfInfoTable">
+            {% if etf_info_error %}<p style="color: red;">Error fetching ETF Info: {{ etf_info_error }}</p>{% endif %}
+            <table border='1' {% if not etf_info or ticker == 'ALL' %}style="display: none;"{% endif %} id="etfInfoTable">
                 <tr><th>Field</th><th>Value</th></tr>
     """
-    if etf_info and ticker != 'ALL':  # Check if etf_info is not None or empty and ticker is not 'ALL'
+    if etf_info and ticker != 'ALL':
         for key, value in etf_info.items():
             if value is not None:  # Skip None values
                 html += f"<tr><td>{key.replace('_', ' ').title()}</td><td>{value}</td></tr>"
@@ -429,13 +435,13 @@ def seasonality_etf_market():
     """
     for t in etf_tickers:
         html += f"""
-            <button onclick="window.location.href'/seasonality/etf-market?ticker={t}'">{t}</button>
+            <button onclick="window.location.href='/seasonality/etf-market?ticker={t}'">{t}</button>
         """
     html += """
             </div>
-            {'<p style="color: red;">Error: {error}</p>' if error else ''}
-            {'<p>No data available for ticker {ticker}</p>' if not error and not data else ''}
-            <table border='1' {'style="display: none;"' if not data else ''} id="etfMarketTable">
+            {% if error %}<p style="color: red;">Error: {{ error }}</p>{% endif %}
+            {% if not error and not data %}<p>No data available for ticker {{ ticker }}</p>{% endif %}
+            <table border='1' {% if not data %}style="display: none;"{% endif %} id="etfMarketTable">
                 <tr>
                     <th><a href="#" onclick="sortTable('ticker')">Ticker</a></th>
                     <th><a href="#" onclick="sortTable('month')">Month</a></th>
@@ -451,12 +457,16 @@ def seasonality_etf_market():
     """
     if data:
         for item in data:
-            avg_change = float(item['avg_change']) if item['avg_change'] else 0.0
-            max_change = float(item['max_change']) if item['max_change'] else 0.0
-            median_change = float(item['median_change']) if item['median_change'] else 0.0
-            min_change = float(item['min_change']) if item['min_change'] else 0.0
-            positive_months_perc = float(item['positive_months_perc']) * 100
-            live_price = get_live_stock_price(item['ticker'])
+            avg_change = float(item.get('avg_change', 0.0)) if item.get('avg_change') else 0.0
+            max_change = float(item.get('max_change', 0.0)) if item.get('max_change') else 0.0
+            median_change = float(item.get('median_change', 0.0)) if item.get('median_change') else 0.0
+            min_change = float(item.get('min_change', 0.0)) if item.get('min_change') else 0.0
+            positive_months_perc = float(item.get('positive_months_perc', 0.0)) * 100
+            positive_closes = item.get('positive_closes', 0)
+            years = item.get('years', 'N/A')
+            month = item.get('month', 'N/A')
+            ticker_val = item.get('ticker', 'N/A')
+            live_price = get_live_stock_price(ticker_val) if ticker_val != 'N/A' else 'N/A'
 
             def format_with_color(value, decimals=2):
                 color = 'red' if value < 0 else 'black'
@@ -464,15 +474,15 @@ def seasonality_etf_market():
 
             html += f"""
             <tr>
-                <td>{item['ticker']}</td>
-                <td>{item['month']}</td>
+                <td>{ticker_val}</td>
+                <td>{month}</td>
                 <td>{format_with_color(avg_change)}</td>
                 <td>{format_with_color(max_change)}</td>
                 <td>{format_with_color(median_change)}</td>
                 <td>{format_with_color(min_change)}</td>
-                <td>{item['positive_closes']}</td>
+                <td>{positive_closes}</td>
                 <td>{positive_months_perc:.2f}%</td>
-                <td>{item['years']}</td>
+                <td>{years}</td>
                 <td>{live_price if isinstance(live_price, (int, float)) else live_price}</td>
             </tr>
             """
@@ -532,21 +542,21 @@ def seasonality_etf_market():
     </div>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-        let sortState = {{ col: 'ticker', dir: 'asc' }};
+        let sortState = { col: 'ticker', dir: 'asc' };
 
-        function sortTable(col) {{
+        function sortTable(col) {
             const newDir = sortState.col === col && sortState.dir === 'asc' ? 'desc' : 'asc';
-            sortState = {{ col: col, dir: newDir }};
-            window.location.href = `/seasonality/etf-market?ticker={ticker if ticker != 'ALL' else 'ALL'}&sort_col=${{col}}&sort_dir=${{newDir}}`;
-        }}
+            sortState = { col: col, dir: newDir };
+            window.location.href = `/seasonality/etf-market?ticker={ticker if ticker != 'ALL' else 'ALL'}&sort_col=${col}&sort_dir=${newDir}`;
+        }
 
         const urlParams = new URLSearchParams(window.location.search);
         const sortCol = urlParams.get('sort_col');
         const sortDir = urlParams.get('sort_dir');
-        if (sortCol && sortDir) {{
+        if (sortCol && sortDir) {
             sortState.col = sortCol;
             sortState.dir = sortDir;
-        }}
+        }
 
         // Chart.js Data
         const commonYears = {json.dumps(common_years)};
@@ -557,9 +567,9 @@ def seasonality_etf_market():
 
         // Price Action Line Chart
         const priceCtx = document.getElementById('yearlyPriceChart').getContext('2d');
-        new Chart(priceCtx, {{
+        new Chart(priceCtx, {
             type: 'line',
-            data: {{
+            data: {
                 labels: commonYears,
                 datasets: [{
                     label: 'Yearly Closing Price',
@@ -570,25 +580,25 @@ def seasonality_etf_market():
                     tension: 0.3,
                     pointRadius: 3
                 }]
-            }},
-            options: {{
+            },
+            options: {
                 responsive: true,
                 maintainAspectRatio: true,
-                scales: {{
-                    x: {{ title: {{ display: true, text: 'Year' }}, ticks: {{ maxRotation: 45, minRotation: 45 }} }},
-                    y: {{ title: {{ display: true, text: 'Price ($)' }}, beginAtZero: true }}
-                }},
-                plugins: {{
-                    legend: {{ display: false }}
-                }}
-            }}
-        }});
+                scales: {
+                    x: { title: { display: true, text: 'Year' }, ticks: { maxRotation: 45, minRotation: 45 } },
+                    y: { title: { display: true, text: 'Price ($)' }, beginAtZero: true }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
 
         // Performance Bar Chart
         const barCtx = document.getElementById('yearlyBarChart').getContext('2d');
-        new Chart(barCtx, {{
+        new Chart(barCtx, {
             type: 'bar',
-            data: {{
+            data: {
                 labels: commonYears,
                 datasets: [{
                     label: 'Yearly % Change',
@@ -597,28 +607,28 @@ def seasonality_etf_market():
                     borderColor: performanceBorderColors,
                     borderWidth: 1
                 }]
-            }},
-            options: {{
+            },
+            options: {
                 responsive: true,
                 maintainAspectRatio: true,
-                scales: {{
-                    x: {{ title: {{ display: true, text: 'Year' }}, ticks: {{ maxRotation: 45, minRotation: 45 }} }},
-                    y: {{ title: {{ display: true, text: '%' }}, beginAtZero: true }}
-                }},
-                plugins: {{
-                    legend: {{ display: false }}
-                }}
-            }}
-        }});
+                scales: {
+                    x: { title: { display: true, text: 'Year' }, ticks: { maxRotation: 45, minRotation: 45 } },
+                    y: { title: { display: true, text: '%' }, beginAtZero: true }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
 
         // Combined Chart (Price Line + Performance Bars)
         const combinedCtx = document.getElementById('combinedChart').getContext('2d');
-        new Chart(combinedCtx, {{
+        new Chart(combinedCtx, {
             type: 'bar',
-            data: {{
+            data: {
                 labels: commonYears,
                 datasets: [
-                    {{
+                    {
                         type: 'line',
                         label: 'Yearly Closing Price',
                         data: priceValuesFiltered,
@@ -628,8 +638,8 @@ def seasonality_etf_market():
                         tension: 0.3,
                         pointRadius: 3,
                         yAxisID: 'y2'
-                    }},
-                    {{
+                    },
+                    {
                         type: 'bar',
                         label: 'Yearly % Change',
                         data: performanceValuesFiltered,
@@ -637,33 +647,33 @@ def seasonality_etf_market():
                         borderColor: performanceBorderColors,
                         borderWidth: 1,
                         yAxisID: 'y1'
-                    }}
+                    }
                 ]
-            }},
-            options: {{
+            },
+            options: {
                 responsive: true,
                 maintainAspectRatio: true,
-                scales: {{
-                    x: {{ title: {{ display: true, text: 'Year' }}, ticks: {{ maxRotation: 45, minRotation: 45 }} }},
-                    y1: {{ 
+                scales: {
+                    x: { title: { display: true, text: 'Year' }, ticks: { maxRotation: 45, minRotation: 45 } },
+                    y1: { 
                         type: 'linear', 
                         position: 'left', 
-                        title: {{ display: true, text: '%' }},
+                        title: { display: true, text: '%' },
                         beginAtZero: true
-                    }},
-                    y2: {{ 
+                    },
+                    y2: { 
                         type: 'linear', 
                         position: 'right', 
-                        title: {{ display: true, text: 'Price ($)' }},
+                        title: { display: true, text: 'Price ($)' },
                         beginAtZero: true,
-                        grid: {{ drawOnChartArea: false }}
-                    }}
-                }},
-                plugins: {{
-                    legend: {{ display: true, position: 'top' }}
-                }}
-            }}
-        }});
+                        grid: { drawOnChartArea: false }
+                    }
+                },
+                plugins: {
+                    legend: { display: true, position: 'top' }
+                }
+            }
+        });
     </script>
     """
     return render_template_string(html)
