@@ -168,8 +168,8 @@ def etf_holdings():
             <div>
                 <button onclick="window.location.href='/etf-research/holdings?ticker=SPY'">SPY</button>
                 <button onclick="window.location.href='/etf-research/holdings?ticker=QQQ'">QQQ</button>
-                <button onclick="window.location.href'/etf-research/holdings?ticker=IWM'">IWM</button>
-                <button onclick="window.location.href'/etf-research/holdings?ticker=XLF'">XLF</button>
+                <button onclick="window.location.href='/etf-research/holdings?ticker=IWM'">IWM</button>
+                <button onclick="window.location.href='/etf-research/holdings?ticker=XLF'">XLF</button>
             </div>
             {f'<p style="color: red;">Error: {error}</p>' if error else ''}
             {f'<p>No data available for ticker {ticker}</p>' if not error and not data else ''}
@@ -279,7 +279,7 @@ def etf_in_outflow():
                 <button onclick="window.location.href='/etf-research/in-outflow?ticker=SPY'">SPY</button>
                 <button onclick="window.location.href='/etf-research/in-outflow?ticker=QQQ'">QQQ</button>
                 <button onclick="window.location.href='/etf-research/in-outflow?ticker=IWM'">IWM</button>
-                <button onclick="window.location.href='/etf-research/in-outflow?ticker=XLF'">XLF</button>
+                <button onclick="window.location.href'/etf-research/in-outflow?ticker=XLF'">XLF</button>
             </div>
             {f'<p style="color: red;">Error: {error}</p>' if error else ''}
             {f'<p>No data available for ticker {ticker}</p>' if not error and not data else ''}
