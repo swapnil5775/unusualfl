@@ -478,105 +478,71 @@ def seasonality_etf_market():
     """
 
     if ticker != 'ALL' and yearly_performance and "error" not in yearly_performance and yearly_prices and "error" not in yearly_prices:
+        # Ensure years match for both datasets (using the intersection of years available)
+        common_years = list(set(years) & set(price_years))
+        common_years.sort()  # Sort to maintain chronological order
+        performance_values_filtered = [performance_values[years.index(year)] for year in common_years if year in years]
+        price_values_filtered = [price_values[price_years.index(year)] for year in common_years if year in price_years]
+
         html += f"""
         <h2>Yearly Analysis for {ticker}</h2>
         <div style="display: flex; flex-wrap: wrap; justify-content: space-around; margin-top: 20px;">
             <div style="flex: 1; min-width: 300px; margin: 10px;">
-                <h3>Performance (Line)</h3>
-                <canvas id="yearlyLineChart"></canvas>
-            </div>
-            <div style="flex: 1; min-width: 300px; margin: 10px;">
-                <h3>Performance (Bar)</h3>
-                <canvas id="yearlyBarChart"></canvas>
-            </div>
-            <div style="flex: 1; min-width: 300px; margin: 10px;">
-                <h3>Closing Price</h3>
-                <canvas id="yearlyPriceChart"></canvas>
+                <h3>Combined Performance & Price</h3>
+                <canvas id="combinedChart"></canvas>
             </div>
         </div>
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
         <script>
-            // Line Chart (Performance)
-            const lineCtx = document.getElementById('yearlyLineChart').getContext('2d');
-            const lineChart = new Chart(lineCtx, {{
+            const ctx = document.getElementById('combinedChart').getContext('2d');
+            const combinedChart = new Chart(ctx, {{
                 type: 'line',
                 data: {{
-                    labels: {json.dumps(years)},
-                    datasets: [{{
-                        label: 'Yearly % Change',
-                        data: {json.dumps(performance_values)},
-                        borderColor: 'rgba(75, 192, 192, 1)',
-                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                        fill: true,
-                        tension: 0.3,
-                        pointRadius: 3
-                    }}]
+                    labels: {json.dumps(common_years)},
+                    datasets: [
+                        {{
+                            label: 'Yearly % Change',
+                            data: {json.dumps(performance_values_filtered)},
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                            fill: true,
+                            tension: 0.3,
+                            pointRadius: 3,
+                            yAxisID: 'y1'  // Left y-axis for % change
+                        }},
+                        {{
+                            label: 'Yearly Closing Price',
+                            data: {json.dumps(price_values_filtered)},
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                            fill: true,
+                            tension: 0.3,
+                            pointRadius: 3,
+                            yAxisID: 'y2'  // Right y-axis for price
+                        }}
+                    ]
                 }},
                 options: {{
                     responsive: true,
                     maintainAspectRatio: true,
                     scales: {{
                         x: {{ title: {{ display: true, text: 'Year' }}, ticks: {{ maxRotation: 45, minRotation: 45 }} }},
-                        y: {{ title: {{ display: true, text: '%' }}, beginAtZero: true }}
+                        y1: {{ 
+                            type: 'linear', 
+                            position: 'left', 
+                            title: {{ display: true, text: '%' }},
+                            beginAtZero: true
+                        }},
+                        y2: {{ 
+                            type: 'linear', 
+                            position: 'right', 
+                            title: {{ display: true, text: 'Price ($)' }},
+                            beginAtZero: true,
+                            grid: {{ drawOnChartArea: false }}  // Hide grid lines for right y-axis to avoid overlap
+                        }}
                     }},
                     plugins: {{
-                        legend: {{ display: false }}
-                    }}
-                }}
-            }});
-
-            // Bar Chart (Performance)
-            const barCtx = document.getElementById('yearlyBarChart').getContext('2d');
-            const barChart = new Chart(barCtx, {{
-                type: 'bar',
-                data: {{
-                    labels: {json.dumps(years)},
-                    datasets: [{{
-                        label: 'Yearly % Change',
-                        data: {json.dumps(performance_values)},
-                        backgroundColor: {json.dumps([val >= 0 and 'rgba(75, 192, 192, 0.7)' or 'rgba(255, 99, 132, 0.7)' for val in performance_values])},
-                        borderColor: {json.dumps([val >= 0 and 'rgba(75, 192, 192, 1)' or 'rgba(255, 99, 132, 1)' for val in performance_values])},
-                        borderWidth: 1
-                    }}]
-                }},
-                options: {{
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    scales: {{
-                        x: {{ title: {{ display: true, text: 'Year' }}, ticks: {{ maxRotation: 45, minRotation: 45 }} }},
-                        y: {{ title: {{ display: true, text: '%' }}, beginAtZero: true }}
-                    }},
-                    plugins: {{
-                        legend: {{ display: false }}
-                    }}
-                }}
-            }});
-
-            // Line Chart (Closing Price)
-            const priceCtx = document.getElementById('yearlyPriceChart').getContext('2d');
-            const priceChart = new Chart(priceCtx, {{
-                type: 'line',
-                data: {{
-                    labels: {json.dumps(price_years)},
-                    datasets: [{{
-                        label: 'Yearly Closing Price',
-                        data: {json.dumps(price_values)},
-                        borderColor: 'rgba(54, 162, 235, 1)',
-                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
-                        fill: true,
-                        tension: 0.3,
-                        pointRadius: 3
-                    }}]
-                }},
-                options: {{
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    scales: {{
-                        x: {{ title: {{ display: true, text: 'Year' }}, ticks: {{ maxRotation: 45, minRotation: 45 }} }},
-                        y: {{ title: {{ display: true, text: 'Price ($)' }}, beginAtZero: true }}
-                    }},
-                    plugins: {{
-                        legend: {{ display: false }}
+                        legend: {{ display: true, position: 'top' }}
                     }}
                 }}
             }});
