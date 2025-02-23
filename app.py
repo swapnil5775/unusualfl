@@ -12,6 +12,10 @@ INST_LIST_API_URL = "https://api.unusualwhales.com/api/institutions"
 INST_HOLDINGS_API_URL = "https://api.unusualwhales.com/api/institution/{name}/holdings"
 SEASONALITY_API_URL = "https://api.unusualwhales.com/api/seasonality/{ticker}/monthly"
 SEASONALITY_MARKET_API_URL = "https://api.unusualwhales.com/api/seasonality/market"
+ETF_EXPOSURE_API_URL = "https://api.unusualwhales.com/api/etfs/{ticker}/exposure"
+ETF_HOLDINGS_API_URL = "https://api.unusualwhales.com/api/etfs/{ticker}/holdings"
+ETF_INOUTFLOW_API_URL = "https://api.unusualwhales.com/api/etfs/{ticker}/in-outflow"
+ETF_INFO_API_URL = "https://api.unusualwhales.com/api/etfs/{ticker}/info"
 
 def get_api_data(url, params=None):
     headers = {"Authorization": f"Bearer {APIKEY}"}
@@ -39,6 +43,7 @@ MENU_BAR = """
     <a href="/institution/list" style="margin-right: 20px;">Institution List</a>
     <a href="/research" style="margin-right: 20px;">Research</a>
     <a href="/seasonality" style="margin-right: 20px;">Seasonality</a>
+    <a href="/etf-research" style="margin-right: 20px;">ETF-Research</a>
 </div>
 """
 
@@ -72,7 +77,6 @@ def institution_list():
         institutions = data.get("data", []) if isinstance(data, dict) else data
         for inst in institutions:
             name = inst if isinstance(inst, str) else inst.get('name', 'N/A')
-            # Use name as ticker if it's a valid ticker; otherwise, handle appropriately
             html += f"<tr><td><a href='#' onclick='showHoldings(\"{name}\")'>{name}</a></td><td>{get_live_stock_price(name) if name.isupper() else 'N/A'}</td><td><a href='#' onclick='showPieChart(\"{name}\")'>View Chart</a></td></tr>"
     else:
         html += f"<tr><td colspan='3'>Error: {data['error']}</td></tr>"
@@ -356,32 +360,43 @@ def seasonality_per_ticker():
             yearly_performance = {"error": f"Error fetching performance: {str(e)}"}
             yearly_prices = {"error": f"Error fetching prices: {str(e)}"}
 
+    # Fetch ETF Info for the info bar
+    etf_info = None
+    etf_info_error = None
+    if ticker:
+        etf_info_response = get_api_data(ETF_INFO_API_URL.format(ticker=ticker))
+        if "error" in etf_info_response:
+            etf_info_error = etf_info_response["error"]
+        else:
+            etf_info = etf_info_response.get("data", [])
+
     html = f"""
     <h1>Seasonality - Per Ticker</h1>
     {MENU_BAR}
-    <div>
-        <form method="GET">
-            <label>Enter Ticker (e.g., AAPL, TSLA, PLTR): </label>
-            <input type="text" name="ticker" value="{ticker}" placeholder="Enter ticker symbol">
-            <button type="submit">GO</button>
-        </form>
-        {'<p style="color: red;">Error (Monthly Data): ' + monthly_error + '</p>' if monthly_error else ''}
-        {'<p style="color: red;">Error (Year-Month Data): ' + yearly_monthly_error + '</p>' if yearly_monthly_error else ''}
-        {'<p>No monthly data available for ticker ' + ticker + '</p>' if not monthly_error and not monthly_data else ''}
-        {'<p>No year-month data available for ticker ' + ticker + '</p>' if not yearly_monthly_error and not yearly_monthly_data else ''}
+    <div style="display: flex; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 300px;">
+            <form method="GET">
+                <label>Enter Ticker (e.g., AAPL, TSLA, PLTR): </label>
+                <input type="text" name="ticker" value="{ticker}" placeholder="Enter ticker symbol">
+                <button type="submit">GO</button>
+            </form>
+            {'<p style="color: red;">Error (Monthly Data): ' + monthly_error + '</p>' if monthly_error else ''}
+            {'<p style="color: red;">Error (Year-Month Data): ' + yearly_monthly_error + '</p>' if yearly_monthly_error else ''}
+            {'<p>No monthly data available for ticker ' + ticker + '</p>' if not monthly_error and not monthly_data else ''}
+            {'<p>No year-month data available for ticker ' + ticker + '</p>' if not yearly_monthly_error and not yearly_monthly_data else ''}
 
-        <h2>Monthly Seasonality Statistics</h2>
-        <table border='1' {'style="display: none;"' if not monthly_data else ''} id="monthlySeasonalityTable">
-            <tr>
-                <th><a href="#" onclick="sortTable('month', 'monthly')">Month</a></th>
-                <th><a href="#" onclick="sortTable('avg_change', 'monthly')">Avg Change</a></th>
-                <th><a href="#" onclick="sortTable('max_change', 'monthly')">Max Change</a></th>
-                <th><a href="#" onclick="sortTable('median_change', 'monthly')">Median Change</a></th>
-                <th><a href="#" onclick="sortTable('min_change', 'monthly')">Min Change</a></th>
-                <th><a href="#" onclick="sortTable('positive_closes', 'monthly')">Positive Closes</a></th>
-                <th><a href="#" onclick="sortTable('positive_months_perc', 'monthly')">Positive Months %</a></th>
-                <th><a href="#" onclick="sortTable('years', 'monthly')">Years</a></th>
-            </tr>
+            <h2>Monthly Seasonality Statistics</h2>
+            <table border='1' {'style="display: none;"' if not monthly_data else ''} id="monthlySeasonalityTable">
+                <tr>
+                    <th><a href="#" onclick="sortTable('month', 'monthly')">Month</a></th>
+                    <th><a href="#" onclick="sortTable('avg_change', 'monthly')">Avg Change</a></th>
+                    <th><a href="#" onclick="sortTable('max_change', 'monthly')">Max Change</a></th>
+                    <th><a href="#" onclick="sortTable('median_change', 'monthly')">Median Change</a></th>
+                    <th><a href="#" onclick="sortTable('min_change', 'monthly')">Min Change</a></th>
+                    <th><a href="#" onclick="sortTable('positive_closes', 'monthly')">Positive Closes</a></th>
+                    <th><a href="#" onclick="sortTable('positive_months_perc', 'monthly')">Positive Months %</a></th>
+                    <th><a href="#" onclick="sortTable('years', 'monthly')">Years</a></th>
+                </tr>
     """
     if monthly_data:
         for item in monthly_data:
@@ -438,11 +453,11 @@ def seasonality_per_ticker():
         <script>
             // Price Action Line Chart
             const priceCtx = document.getElementById('yearlyPriceChart').getContext('2d');
-            const priceChart = new Chart(priceCtx, {{
+            const priceChart = new Chart(priceCtx, {
                 type: 'line',
-                data: {{
+                data: {
                     labels: {json.dumps(common_years)},
-                    datasets: [{{
+                    datasets: [{
                         label: 'Yearly Closing Price',
                         data: {json.dumps(price_values_filtered)},
                         borderColor: 'rgba(54, 162, 235, 1)',
@@ -450,56 +465,56 @@ def seasonality_per_ticker():
                         fill: true,
                         tension: 0.3,
                         pointRadius: 3
-                    }}]
-                }},
-                options: {{
+                    }]
+                },
+                options: {
                     responsive: true,
                     maintainAspectRatio: true,
-                    scales: {{
-                        x: {{ title: {{ display: true, text: 'Year' }}, ticks: {{ maxRotation: 45, minRotation: 45 }} }},
-                        y: {{ title: {{ display: true, text: 'Price ($)' }}, beginAtZero: true }}
-                    }},
-                    plugins: {{
-                        legend: {{ display: false }}
-                    }}
-                }}
-            }});
+                    scales: {
+                        x: { title: { display: true, text: 'Year' }, ticks: { maxRotation: 45, minRotation: 45 } },
+                        y: { title: { display: true, text: 'Price ($)' }, beginAtZero: true }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
 
             // Performance Bar Chart
             const barCtx = document.getElementById('yearlyBarChart').getContext('2d');
-            const barChart = new Chart(barCtx, {{
+            const barChart = new Chart(barCtx, {
                 type: 'bar',
-                data: {{
+                data: {
                     labels: {json.dumps(common_years)},
-                    datasets: [{{
+                    datasets: [{
                         label: 'Yearly % Change',
                         data: {json.dumps(performance_values_filtered)},
                         backgroundColor: {json.dumps([val >= 0 and 'rgba(75, 192, 192, 0.7)' or 'rgba(255, 99, 132, 0.7)' for val in performance_values_filtered])},
                         borderColor: {json.dumps([val >= 0 and 'rgba(75, 192, 192, 1)' or 'rgba(255, 99, 132, 1)' for val in performance_values_filtered])},
                         borderWidth: 1
-                    }}]
-                }},
-                options: {{
+                    }]
+                },
+                options: {
                     responsive: true,
                     maintainAspectRatio: true,
-                    scales: {{
-                        x: {{ title: {{ display: true, text: 'Year' }}, ticks: {{ maxRotation: 45, minRotation: 45 }} }},
-                        y: {{ title: {{ display: true, text: '%' }}, beginAtZero: true }}
-                    }},
-                    plugins: {{
-                        legend: {{ display: false }}
-                    }}
-                }}
-            }});
+                    scales: {
+                        x: { title: { display: true, text: 'Year' }, ticks: { maxRotation: 45, minRotation: 45 } },
+                        y: { title: { display: true, text: '%' }, beginAtZero: true }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
 
             // Combined Chart (Price Line + Performance Bars)
             const combinedCtx = document.getElementById('combinedChart').getContext('2d');
-            const combinedChart = new Chart(combinedCtx, {{
+            const combinedChart = new Chart(combinedCtx, {
                 type: 'bar',
-                data: {{
+                data: {
                     labels: {json.dumps(common_years)},
                     datasets: [
-                        {{
+                        {
                             type: 'line',
                             label: 'Yearly Closing Price',
                             data: {json.dumps(price_values_filtered)},
@@ -509,8 +524,8 @@ def seasonality_per_ticker():
                             tension: 0.3,
                             pointRadius: 3,
                             yAxisID: 'y2'  // Right y-axis for price
-                        }},
-                        {{
+                        },
+                        {
                             type: 'bar',
                             label: 'Yearly % Change',
                             data: {json.dumps(performance_values_filtered)},
@@ -518,33 +533,33 @@ def seasonality_per_ticker():
                             borderColor: {json.dumps([val >= 0 and 'rgba(75, 192, 192, 1)' or 'rgba(255, 99, 132, 1)' for val in performance_values_filtered])},
                             borderWidth: 1,
                             yAxisID: 'y1'  // Left y-axis for % change
-                        }}
+                        }
                     ]
-                }},
-                options: {{
+                },
+                options: {
                     responsive: true,
                     maintainAspectRatio: true,
-                    scales: {{
-                        x: {{ title: {{ display: true, text: 'Year' }}, ticks: {{ maxRotation: 45, minRotation: 45 }} }},
-                        y1: {{ 
+                    scales: {
+                        x: { title: { display: true, text: 'Year' }, ticks: { maxRotation: 45, minRotation: 45 } },
+                        y1: { 
                             type: 'linear', 
                             position: 'left', 
-                            title: {{ display: true, text: '%' }},
+                            title: { display: true, text: '%' },
                             beginAtZero: true
-                        }},
-                        y2: {{ 
+                        },
+                        y2: { 
                             type: 'linear', 
                             position: 'right', 
-                            title: {{ display: true, text: 'Price ($)' }},
+                            title: { display: true, text: 'Price ($)' },
                             beginAtZero: true,
-                            grid: {{ drawOnChartArea: false }}  // Hide grid lines for right y-axis to avoid overlap
-                        }}
-                    }},
-                    plugins: {{
-                        legend: {{ display: true, position: 'top' }}
-                    }}
-                }}
-            }});
+                            grid: { drawOnChartArea: false }  // Hide grid lines for right y-axis to avoid overlap
+                        }
+                    },
+                    plugins: {
+                        legend: { display: true, position: 'top' }
+                    }
+                }
+            });
         </script>
         """
 
@@ -611,6 +626,26 @@ def seasonality_per_ticker():
         }
     </script>
     """
+    # Add ETF Info Table at the top
+    html = f"""
+    <div style="display: flex; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 300px; margin-bottom: 20px;">
+            <h2>ETF Info for {ticker}</h2>
+            {'<p style="color: red;">Error fetching ETF Info: ' + etf_info_error + '</p>' if etf_info_error else ''}
+            <table border='1' {'style="display: none;"' if not etf_info else ''} id="etfInfoTable">
+                <tr><th>Field</th><th>Value</th></tr>
+    """
+    if etf_info and len(etf_info) > 0:
+        info = etf_info[0]  # Assuming the first item contains the ETF info
+        for key, value in info.items():
+            if value is not None:  # Skip None values
+                html += f"<tr><td>{key.replace('_', ' ').title()}</td><td>{value}</td></tr>"
+    html += """
+            </table>
+        </div>
+    </div>
+    """ + html
+
     return render_template_string(html)
 
 @app.route('/seasonality/etf-market', methods=['GET'])
@@ -646,37 +681,62 @@ def seasonality_etf_market():
             yearly_performance = {"error": f"Error fetching performance: {str(e)}"}
             yearly_prices = {"error": f"Error fetching prices: {str(e)}"}
 
+    # Fetch ETF Info for the info bar
+    etf_info = None
+    etf_info_error = None
+    if ticker != 'ALL':
+        etf_info_response = get_api_data(ETF_INFO_API_URL.format(ticker=ticker))
+        if "error" in etf_info_response:
+            etf_info_error = etf_info_response["error"]
+        else:
+            etf_info = etf_info_response.get("data", [])
+
     etf_tickers = ['SPY', 'QQQ', 'IWM', 'XLE', 'XLC', 'XLK', 'XLV', 'XLP', 'XLY', 'XLRE', 'XLF', 'XLI', 'XLB']
 
     html = f"""
     <h1>Seasonality - ETF Market</h1>
     {MENU_BAR}
-    <div>
-        <h3>Select ETF or View All:</h3>
-        <div>
-            <button onclick="window.location.href='/seasonality/etf-market?ticker=ALL'">ALL</button>
+    <div style="display: flex; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 300px; margin-bottom: 20px;">
+            <h2>ETF Info for {ticker}</h2>
+            {'<p style="color: red;">Error fetching ETF Info: ' + etf_info_error + '</p>' if etf_info_error else ''}
+            <table border='1' {'style="display: none;"' if not etf_info or ticker == 'ALL' else ''} id="etfInfoTable">
+                <tr><th>Field</th><th>Value</th></tr>
+    """
+    if etf_info and len(etf_info) > 0 and ticker != 'ALL':
+        info = etf_info[0]  # Assuming the first item contains the ETF info
+        for key, value in info.items():
+            if value is not None:  # Skip None values
+                html += f"<tr><td>{key.replace('_', ' ').title()}</td><td>{value}</td></tr>"
+    html += """
+            </table>
+        </div>
+        <div style="flex: 2; min-width: 300px;">
+            <h3>Select ETF or View All:</h3>
+            <div>
+                <button onclick="window.location.href='/seasonality/etf-market?ticker=ALL'">ALL</button>
     """
     for t in etf_tickers:
         html += f"""
             <button onclick="window.location.href='/seasonality/etf-market?ticker={t}'">{t}</button>
         """
     html += """
-        </div>
-        {'<p style="color: red;">Error: ' + error + '</p>' if error else ''}
-        {'<p>No data available for ticker ' + ticker + '</p>' if not error and not data else ''}
-        <table border='1' {'style="display: none;"' if not data else ''} id="etfMarketTable">
-            <tr>
-                <th><a href="#" onclick="sortTable('ticker')">Ticker</a></th>
-                <th><a href="#" onclick="sortTable('month')">Month</a></th>
-                <th><a href="#" onclick="sortTable('avg_change')">Avg Change</a></th>
-                <th><a href="#" onclick="sortTable('max_change')">Max Change</a></th>
-                <th><a href="#" onclick="sortTable('median_change')">Median Change</a></th>
-                <th><a href="#" onclick="sortTable('min_change')">Min Change</a></th>
-                <th><a href="#" onclick="sortTable('positive_closes')">Positive Closes</a></th>
-                <th><a href="#" onclick="sortTable('positive_months_perc')">Positive Months %</a></th>
-                <th><a href="#" onclick="sortTable('years')">Years</a></th>
-                <th>Live Price</th>
-            </tr>
+            </div>
+            {'<p style="color: red;">Error: ' + error + '</p>' if error else ''}
+            {'<p>No data available for ticker ' + ticker + '</p>' if not error and not data else ''}
+            <table border='1' {'style="display: none;"' if not data else ''} id="etfMarketTable">
+                <tr>
+                    <th><a href="#" onclick="sortTable('ticker')">Ticker</a></th>
+                    <th><a href="#" onclick="sortTable('month')">Month</a></th>
+                    <th><a href="#" onclick="sortTable('avg_change')">Avg Change</a></th>
+                    <th><a href="#" onclick="sortTable('max_change')">Max Change</a></th>
+                    <th><a href="#" onclick="sortTable('median_change')">Median Change</a></th>
+                    <th><a href="#" onclick="sortTable('min_change')">Min Change</a></th>
+                    <th><a href="#" onclick="sortTable('positive_closes')">Positive Closes</a></th>
+                    <th><a href="#" onclick="sortTable('positive_months_perc')">Positive Months %</a></th>
+                    <th><a href="#" onclick="sortTable('years')">Years</a></th>
+                    <th>Live Price</th>
+                </tr>
     """
     if data:
         for item in data:
@@ -707,7 +767,7 @@ def seasonality_etf_market():
             """
 
     html += """
-        </table>
+            </table>
     """
 
     if ticker != 'ALL' and yearly_performance and "error" not in yearly_performance and yearly_prices and "error" not in yearly_prices:
@@ -737,11 +797,11 @@ def seasonality_etf_market():
         <script>
             // Price Action Line Chart
             const priceCtx = document.getElementById('yearlyPriceChart').getContext('2d');
-            const priceChart = new Chart(priceCtx, {{
+            const priceChart = new Chart(priceCtx, {
                 type: 'line',
-                data: {{
+                data: {
                     labels: {json.dumps(common_years)},
-                    datasets: [{{
+                    datasets: [{
                         label: 'Yearly Closing Price',
                         data: {json.dumps(price_values_filtered)},
                         borderColor: 'rgba(54, 162, 235, 1)',
@@ -749,56 +809,56 @@ def seasonality_etf_market():
                         fill: true,
                         tension: 0.3,
                         pointRadius: 3
-                    }}]
-                }},
-                options: {{
+                    }]
+                },
+                options: {
                     responsive: true,
                     maintainAspectRatio: true,
-                    scales: {{
-                        x: {{ title: {{ display: true, text: 'Year' }}, ticks: {{ maxRotation: 45, minRotation: 45 }} }},
-                        y: {{ title: {{ display: true, text: 'Price ($)' }}, beginAtZero: true }}
-                    }},
-                    plugins: {{
-                        legend: {{ display: false }}
-                    }}
-                }}
-            }});
+                    scales: {
+                        x: { title: { display: true, text: 'Year' }, ticks: { maxRotation: 45, minRotation: 45 } },
+                        y: { title: { display: true, text: 'Price ($)' }, beginAtZero: true }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
 
             // Performance Bar Chart
             const barCtx = document.getElementById('yearlyBarChart').getContext('2d');
-            const barChart = new Chart(barCtx, {{
+            const barChart = new Chart(barCtx, {
                 type: 'bar',
-                data: {{
+                data: {
                     labels: {json.dumps(common_years)},
-                    datasets: [{{
+                    datasets: [{
                         label: 'Yearly % Change',
                         data: {json.dumps(performance_values_filtered)},
                         backgroundColor: {json.dumps([val >= 0 and 'rgba(75, 192, 192, 0.7)' or 'rgba(255, 99, 132, 0.7)' for val in performance_values_filtered])},
                         borderColor: {json.dumps([val >= 0 and 'rgba(75, 192, 192, 1)' or 'rgba(255, 99, 132, 1)' for val in performance_values_filtered])},
                         borderWidth: 1
-                    }}]
-                }},
-                options: {{
+                    }]
+                },
+                options: {
                     responsive: true,
                     maintainAspectRatio: true,
-                    scales: {{
-                        x: {{ title: {{ display: true, text: 'Year' }}, ticks: {{ maxRotation: 45, minRotation: 45 }} }},
-                        y: {{ title: {{ display: true, text: '%' }}, beginAtZero: true }}
-                    }},
-                    plugins: {{
-                        legend: {{ display: false }}
-                    }}
-                }}
-            }});
+                    scales: {
+                        x: { title: { display: true, text: 'Year' }, ticks: { maxRotation: 45, minRotation: 45 } },
+                        y: { title: { display: true, text: '%' }, beginAtZero: true }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
 
             // Combined Chart (Price Line + Performance Bars)
             const combinedCtx = document.getElementById('combinedChart').getContext('2d');
-            const combinedChart = new Chart(combinedCtx, {{
+            const combinedChart = new Chart(combinedCtx, {
                 type: 'bar',
-                data: {{
+                data: {
                     labels: {json.dumps(common_years)},
                     datasets: [
-                        {{
+                        {
                             type: 'line',
                             label: 'Yearly Closing Price',
                             data: {json.dumps(price_values_filtered)},
@@ -808,8 +868,8 @@ def seasonality_etf_market():
                             tension: 0.3,
                             pointRadius: 3,
                             yAxisID: 'y2'  // Right y-axis for price
-                        }},
-                        {{
+                        },
+                        {
                             type: 'bar',
                             label: 'Yearly % Change',
                             data: {json.dumps(performance_values_filtered)},
@@ -817,33 +877,33 @@ def seasonality_etf_market():
                             borderColor: {json.dumps([val >= 0 and 'rgba(75, 192, 192, 1)' or 'rgba(255, 99, 132, 1)' for val in performance_values_filtered])},
                             borderWidth: 1,
                             yAxisID: 'y1'  // Left y-axis for % change
-                        }}
+                        }
                     ]
-                }},
-                options: {{
+                },
+                options: {
                     responsive: true,
                     maintainAspectRatio: true,
-                    scales: {{
-                        x: {{ title: {{ display: true, text: 'Year' }}, ticks: {{ maxRotation: 45, minRotation: 45 }} }},
-                        y1: {{ 
+                    scales: {
+                        x: { title: { display: true, text: 'Year' }, ticks: { maxRotation: 45, minRotation: 45 } },
+                        y1: { 
                             type: 'linear', 
                             position: 'left', 
-                            title: {{ display: true, text: '%' }},
+                            title: { display: true, text: '%' },
                             beginAtZero: true
-                        }},
-                        y2: {{ 
+                        },
+                        y2: { 
                             type: 'linear', 
                             position: 'right', 
-                            title: {{ display: true, text: 'Price ($)' }},
+                            title: { display: true, text: 'Price ($)' },
                             beginAtZero: true,
-                            grid: {{ drawOnChartArea: false }}  // Hide grid lines for right y-axis to avoid overlap
-                        }}
-                    }},
-                    plugins: {{
-                        legend: {{ display: true, position: 'top' }}
-                    }}
-                }}
-            }});
+                            grid: { drawOnChartArea: false }  // Hide grid lines for right y-axis to avoid overlap
+                        }
+                    },
+                    plugins: {
+                        legend: { display: true, position: 'top' }
+                    }
+                }
+            });
         </script>
         """
 
@@ -894,6 +954,269 @@ def seasonality_etf_market():
             sortState.dir = sortDir;
         }
     </script>
+    """
+    return render_template_string(html)
+
+@app.route('/etf-research')
+def etf_research():
+    html = f"""
+    <h1>ETF-Research</h1>
+    {MENU_BAR}
+    <p>Select a sub-page to view ETF data.</p>
+    <ul>
+        <li><a href="/etf-research/exposure">Exposure</a></li>
+        <li><a href="/etf-research/holdings">Holdings</a></li>
+        <li><a href="/etf-research/in-outflow">In-Out Flow</a></li>
+    </ul>
+    """
+    return render_template_string(html)
+
+@app.route('/etf-research/exposure', methods=['GET'])
+def etf_exposure():
+    ticker = request.args.get('ticker', '').upper()
+    data = None
+    error = None
+
+    if ticker:
+        response = get_api_data(ETF_EXPOSURE_API_URL.format(ticker=ticker))
+        if "error" in response:
+            error = response["error"]
+        else:
+            data = response.get("data", [])
+
+    # Fetch ETF Info for the info bar
+    etf_info = None
+    etf_info_error = None
+    if ticker:
+        etf_info_response = get_api_data(ETF_INFO_API_URL.format(ticker=ticker))
+        if "error" in etf_info_response:
+            etf_info_error = etf_info_response["error"]
+        else:
+            etf_info = etf_info_response.get("data", [])
+
+    html = f"""
+    <h1>ETF-Research - Exposure</h1>
+    {MENU_BAR}
+    <div style="display: flex; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 300px; margin-bottom: 20px;">
+            <h2>ETF Info for {ticker}</h2>
+            {'<p style="color: red;">Error fetching ETF Info: ' + etf_info_error + '</p>' if etf_info_error else ''}
+            <table border='1' {'style="display: none;"' if not etf_info else ''} id="etfInfoTable">
+                <tr><th>Field</th><th>Value</th></tr>
+    """
+    if etf_info and len(etf_info) > 0:
+        info = etf_info[0]  # Assuming the first item contains the ETF info
+        for key, value in info.items():
+            if value is not None:  # Skip None values
+                html += f"<tr><td>{key.replace('_', ' ').title()}</td><td>{value}</td></tr>"
+    html += """
+            </table>
+        </div>
+        <div style="flex: 2; min-width: 300px;">
+            <form method="GET">
+                <label>Enter ETF Ticker (e.g., SPY, QQQ): </label>
+                <input type="text" name="ticker" value="{ticker}" placeholder="Enter ETF ticker symbol">
+                <button type="submit">Search</button>
+            </form>
+            <h3>Or Click a Predefined ETF:</h3>
+            <div>
+                <button onclick="window.location.href='/etf-research/exposure?ticker=SPY'">SPY</button>
+                <button onclick="window.location.href='/etf-research/exposure?ticker=QQQ'">QQQ</button>
+                <button onclick="window.location.href='/etf-research/exposure?ticker=IWM'">IWM</button>
+                <button onclick="window.location.href='/etf-research/exposure?ticker=XLF'">XLF</button>
+            </div>
+            {'<p style="color: red;">Error: ' + error + '</p>' if error else ''}
+            {'<p>No data available for ticker ' + ticker + '</p>' if not error and not data else ''}
+            <table border='1' {'style="display: none;"' if not data else ''} id="exposureTable">
+                <tr>
+                    <th>ETF</th>
+                    <th>Full Name</th>
+                    <th>Last Price</th>
+                    <th>Previous Price</th>
+                    <th>Shares</th>
+                    <th>Weight (%)</th>
+                </tr>
+    """
+    if data:
+        for item in data:
+            html += f"""
+            <tr>
+                <td>{item['etf']}</td>
+                <td>{item['full_name']}</td>
+                <td>{item['last_price']}</td>
+                <td>{item['prev_price']}</td>
+                <td>{item['shares']}</td>
+                <td>{float(item['weight']):.2f}%</td>
+            </tr>
+            """
+    html += """
+            </table>
+        </div>
+    </div>
+    """
+    return render_template_string(html)
+
+@app.route('/etf-research/holdings', methods=['GET'])
+def etf_holdings():
+    ticker = request.args.get('ticker', '').upper()
+    data = None
+    error = None
+
+    if ticker:
+        response = get_api_data(ETF_HOLDINGS_API_URL.format(ticker=ticker))
+        if "error" in response:
+            error = response["error"]
+        else:
+            data = response.get("data", [])
+
+    # Fetch ETF Info for the info bar
+    etf_info = None
+    etf_info_error = None
+    if ticker:
+        etf_info_response = get_api_data(ETF_INFO_API_URL.format(ticker=ticker))
+        if "error" in etf_info_response:
+            etf_info_error = etf_info_response["error"]
+        else:
+            etf_info = etf_info_response.get("data", [])
+
+    html = f"""
+    <h1>ETF-Research - Holdings</h1>
+    {MENU_BAR}
+    <div style="display: flex; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 300px; margin-bottom: 20px;">
+            <h2>ETF Info for {ticker}</h2>
+            {'<p style="color: red;">Error fetching ETF Info: ' + etf_info_error + '</p>' if etf_info_error else ''}
+            <table border='1' {'style="display: none;"' if not etf_info else ''} id="etfInfoTable">
+                <tr><th>Field</th><th>Value</th></tr>
+    """
+    if etf_info and len(etf_info) > 0:
+        info = etf_info[0]  # Assuming the first item contains the ETF info
+        for key, value in info.items():
+            if value is not None:  # Skip None values
+                html += f"<tr><td>{key.replace('_', ' ').title()}</td><td>{value}</td></tr>"
+    html += """
+            </table>
+        </div>
+        <div style="flex: 2; min-width: 300px;">
+            <form method="GET">
+                <label>Enter ETF Ticker (e.g., SPY, QQQ): </label>
+                <input type="text" name="ticker" value="{ticker}" placeholder="Enter ETF ticker symbol">
+                <button type="submit">Search</button>
+            </form>
+            <h3>Or Click a Predefined ETF:</h3>
+            <div>
+                <button onclick="window.location.href='/etf-research/holdings?ticker=SPY'">SPY</button>
+                <button onclick="window.location.href='/etf-research/holdings?ticker=QQQ'">QQQ</button>
+                <button onclick="window.location.href='/etf-research/holdings?ticker=IWM'">IWM</button>
+                <button onclick="window.location.href='/etf-research/holdings?ticker=XLF'">XLF</button>
+            </div>
+            {'<p style="color: red;">Error: ' + error + '</p>' if error else ''}
+            {'<p>No data available for ticker ' + ticker + '</p>' if not error and not data else ''}
+            <table border='1' {'style="display: none;"' if not data else ''} id="holdingsTable">
+                <tr>
+                    <th>Ticker</th>
+                    <th>Name</th>
+                    <th>Shares</th>
+                    <th>Weight (%)</th>
+                    <th>Market Value</th>
+                </tr>
+    """
+    if data:
+        for item in data:
+            html += f"""
+            <tr>
+                <td>{item['ticker']}</td>
+                <td>{item['name']}</td>
+                <td>{item['shares']}</td>
+                <td>{float(item['weight']):.2f}%</td>
+                <td>{item['market_value']}</td>
+            </tr>
+            """
+    html += """
+            </table>
+        </div>
+    </div>
+    """
+    return render_template_string(html)
+
+@app.route('/etf-research/in-outflow', methods=['GET'])
+def etf_in_outflow():
+    ticker = request.args.get('ticker', '').upper()
+    data = None
+    error = None
+
+    if ticker:
+        response = get_api_data(ETF_INOUTFLOW_API_URL.format(ticker=ticker))
+        if "error" in response:
+            error = response["error"]
+        else:
+            data = response.get("data", [])
+
+    # Fetch ETF Info for the info bar
+    etf_info = None
+    etf_info_error = None
+    if ticker:
+        etf_info_response = get_api_data(ETF_INFO_API_URL.format(ticker=ticker))
+        if "error" in etf_info_response:
+            etf_info_error = etf_info_response["error"]
+        else:
+            etf_info = etf_info_response.get("data", [])
+
+    html = f"""
+    <h1>ETF-Research - In-Out Flow</h1>
+    {MENU_BAR}
+    <div style="display: flex; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 300px; margin-bottom: 20px;">
+            <h2>ETF Info for {ticker}</h2>
+            {'<p style="color: red;">Error fetching ETF Info: ' + etf_info_error + '</p>' if etf_info_error else ''}
+            <table border='1' {'style="display: none;"' if not etf_info else ''} id="etfInfoTable">
+                <tr><th>Field</th><th>Value</th></tr>
+    """
+    if etf_info and len(etf_info) > 0:
+        info = etf_info[0]  # Assuming the first item contains the ETF info
+        for key, value in info.items():
+            if value is not None:  # Skip None values
+                html += f"<tr><td>{key.replace('_', ' ').title()}</td><td>{value}</td></tr>"
+    html += """
+            </table>
+        </div>
+        <div style="flex: 2; min-width: 300px;">
+            <form method="GET">
+                <label>Enter ETF Ticker (e.g., SPY, QQQ): </label>
+                <input type="text" name="ticker" value="{ticker}" placeholder="Enter ETF ticker symbol">
+                <button type="submit">Search</button>
+            </form>
+            <h3>Or Click a Predefined ETF:</h3>
+            <div>
+                <button onclick="window.location.href='/etf-research/in-outflow?ticker=SPY'">SPY</button>
+                <button onclick="window.location.href='/etf-research/in-outflow?ticker=QQQ'">QQQ</button>
+                <button onclick="window.location.href='/etf-research/in-outflow?ticker=IWM'">IWM</button>
+                <button onclick="window.location.href='/etf-research/in-outflow?ticker=XLF'">XLF</button>
+            </div>
+            {'<p style="color: red;">Error: ' + error + '</p>' if error else ''}
+            {'<p>No data available for ticker ' + ticker + '</p>' if not error and not data else ''}
+            <table border='1' {'style="display: none;"' if not data else ''} id="inOutflowTable">
+                <tr>
+                    <th>Date</th>
+                    <th>Inflow</th>
+                    <th>Outflow</th>
+                    <th>Net Flow</th>
+                </tr>
+    """
+    if data:
+        for item in data:
+            html += f"""
+            <tr>
+                <td>{item['date']}</td>
+                <td>{item['inflow']}</td>
+                <td>{item['outflow']}</td>
+                <td>{item['net_flow']}</td>
+            </tr>
+            """
+    html += """
+            </table>
+        </div>
+    </div>
     """
     return render_template_string(html)
 
