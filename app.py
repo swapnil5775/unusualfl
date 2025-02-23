@@ -19,7 +19,7 @@ def get_api_data(url, params=None):
         response = requests.get(url, headers=headers, params=params)
         response.raise_for_status()
         print(f"Response Status Code: {response.status_code}")
-        print(f"Response Headers: {dict(response.headers)}")
+        print(f"Response Headers: {dict(response.headers)}")  # Exclude sensitive headers if needed
         return response.json()
     except (requests.RequestException, json.JSONDecodeError) as e:
         print(f"Request Error - URL: {url}, Status Code: {getattr(response, 'status_code', 'N/A')}, Error: {str(e)}")
@@ -386,6 +386,7 @@ def seasonality_etf_market():
     data = None
     error = None
     yearly_performance = None
+    yearly_prices = None
 
     response = get_api_data(SEASONALITY_MARKET_API_URL)
     if "error" in response:
@@ -399,12 +400,18 @@ def seasonality_etf_market():
         try:
             stock = yf.Ticker(ticker)
             hist = stock.history(period="max", interval="1mo")
+            # Yearly performance (% change)
             yearly_performance = hist['Close'].resample('Y').last().pct_change().dropna() * 100
             yearly_performance = yearly_performance.to_dict()
             years = [dt.strftime('%Y') for dt in yearly_performance.keys()]
             performance_values = list(yearly_performance.values())
+            # Yearly closing prices
+            yearly_prices = hist['Close'].resample('Y').last().dropna().to_dict()
+            price_years = [dt.strftime('%Y') for dt in yearly_prices.keys()]
+            price_values = list(yearly_prices.values())
         except Exception as e:
             yearly_performance = {"error": f"Error fetching performance: {str(e)}"}
+            yearly_prices = {"error": f"Error fetching prices: {str(e)}"}
 
     etf_tickers = ['SPY', 'QQQ', 'IWM', 'XLE', 'XLC', 'XLK', 'XLV', 'XLP', 'XLY', 'XLRE', 'XLF', 'XLI', 'XLB']
 
@@ -470,22 +477,26 @@ def seasonality_etf_market():
         </table>
     """
 
-    if ticker != 'ALL' and yearly_performance and "error" not in yearly_performance:
+    if ticker != 'ALL' and yearly_performance and "error" not in yearly_performance and yearly_prices and "error" not in yearly_prices:
         html += f"""
-        <h2>Yearly Performance for {ticker}</h2>
-        <div style="display: flex; justify-content: space-around; margin-top: 20px;">
-            <div>
-                <h3>Line Chart</h3>
-                <canvas id="yearlyLineChart" width="300" height="200"></canvas>
+        <h2>Yearly Analysis for {ticker}</h2>
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-around; margin-top: 20px;">
+            <div style="flex: 1; min-width: 300px; margin: 10px;">
+                <h3>Performance (Line)</h3>
+                <canvas id="yearlyLineChart"></canvas>
             </div>
-            <div>
-                <h3>Bar Chart</h3>
-                <canvas id="yearlyBarChart" width="300" height="200"></canvas>
+            <div style="flex: 1; min-width: 300px; margin: 10px;">
+                <h3>Performance (Bar)</h3>
+                <canvas id="yearlyBarChart"></canvas>
+            </div>
+            <div style="flex: 1; min-width: 300px; margin: 10px;">
+                <h3>Closing Price</h3>
+                <canvas id="yearlyPriceChart"></canvas>
             </div>
         </div>
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
         <script>
-            // Line Chart
+            // Line Chart (Performance)
             const lineCtx = document.getElementById('yearlyLineChart').getContext('2d');
             const lineChart = new Chart(lineCtx, {{
                 type: 'line',
@@ -502,7 +513,8 @@ def seasonality_etf_market():
                     }}]
                 }},
                 options: {{
-                    responsive: false,
+                    responsive: true,
+                    maintainAspectRatio: true,
                     scales: {{
                         x: {{ title: {{ display: true, text: 'Year' }}, ticks: {{ maxRotation: 45, minRotation: 45 }} }},
                         y: {{ title: {{ display: true, text: '%' }}, beginAtZero: true }}
@@ -513,7 +525,7 @@ def seasonality_etf_market():
                 }}
             }});
 
-            // Bar Chart
+            // Bar Chart (Performance)
             const barCtx = document.getElementById('yearlyBarChart').getContext('2d');
             const barChart = new Chart(barCtx, {{
                 type: 'bar',
@@ -522,13 +534,14 @@ def seasonality_etf_market():
                     datasets: [{{
                         label: 'Yearly % Change',
                         data: {json.dumps(performance_values)},
-                        backgroundColor: performance_values.map(val => val >= 0 ? 'rgba(75, 192, 192, 0.7)' : 'rgba(255, 99, 132, 0.7)'),
-                        borderColor: performance_values.map(val => val >= 0 ? 'rgba(75, 192, 192, 1)' : 'rgba(255, 99, 132, 1)'),
+                        backgroundColor: {json.dumps([val >= 0 and 'rgba(75, 192, 192, 0.7)' or 'rgba(255, 99, 132, 0.7)' for val in performance_values])},
+                        borderColor: {json.dumps([val >= 0 and 'rgba(75, 192, 192, 1)' or 'rgba(255, 99, 132, 1)' for val in performance_values])},
                         borderWidth: 1
                     }}]
                 }},
                 options: {{
-                    responsive: false,
+                    responsive: true,
+                    maintainAspectRatio: true,
                     scales: {{
                         x: {{ title: {{ display: true, text: 'Year' }}, ticks: {{ maxRotation: 45, minRotation: 45 }} }},
                         y: {{ title: {{ display: true, text: '%' }}, beginAtZero: true }}
@@ -538,10 +551,39 @@ def seasonality_etf_market():
                     }}
                 }}
             }});
+
+            // Line Chart (Closing Price)
+            const priceCtx = document.getElementById('yearlyPriceChart').getContext('2d');
+            const priceChart = new Chart(priceCtx, {{
+                type: 'line',
+                data: {{
+                    labels: {json.dumps(price_years)},
+                    datasets: [{{
+                        label: 'Yearly Closing Price',
+                        data: {json.dumps(price_values)},
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 3
+                    }}]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    scales: {{
+                        x: {{ title: {{ display: true, text: 'Year' }}, ticks: {{ maxRotation: 45, minRotation: 45 }} }},
+                        y: {{ title: {{ display: true, text: 'Price ($)' }}, beginAtZero: true }}
+                    }},
+                    plugins: {{
+                        legend: {{ display: false }}
+                    }}
+                }}
+            }});
         </script>
         """
-    elif ticker != 'ALL' and yearly_performance and "error" in yearly_performance:
-        html += f"<p style='color: red;'>{yearly_performance['error']}</p>"
+    elif ticker != 'ALL' and (yearly_performance and "error" in yearly_performance or yearly_prices and "error" in yearly_prices):
+        html += f"<p style='color: red;'>{(yearly_performance.get('error', '') if yearly_performance else '') + ' ' + (yearly_prices.get('error', '') if yearly_prices else '')}</p>"
 
     html += """
     </div>
