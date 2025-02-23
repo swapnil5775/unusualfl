@@ -993,16 +993,21 @@ def etf_exposure():
 
     if ticker:
         response = get_api_data(ETF_EXPOSURE_API_URL.format(ticker=ticker))
+        print(f"ETF Exposure API Response for {ticker}: {response}")  # Log the full response for debugging
         if "error" in response:
             error = response["error"]
         else:
             data = response.get("data", [])
+            if not isinstance(data, list):  # Ensure data is a list
+                error = f"Unexpected API response format: data is not a list, got {type(data)}"
+                data = None
 
     # Fetch ETF Info for the info bar
     etf_info = None
     etf_info_error = None
     if ticker:
         etf_info_response = get_api_data(ETF_INFO_API_URL.format(ticker=ticker))
+        print(f"ETF Info API Response for {ticker}: {etf_info_response}")  # Log the full response
         if "error" in etf_info_response:
             etf_info_error = etf_info_response["error"]
         else:
@@ -1053,14 +1058,21 @@ def etf_exposure():
     """
     if data:
         for item in data:
+            # Add fallback values for missing keys to prevent KeyError
+            etf = item.get('etf', 'N/A')
+            full_name = item.get('full_name', 'N/A')
+            last_price = item.get('last_price', 'N/A')
+            prev_price = item.get('prev_price', 'N/A')
+            shares = item.get('shares', 'N/A')
+            weight = item.get('weight', 'N/A')
             html += f"""
             <tr>
-                <td>{item['etf']}</td>
-                <td>{item['full_name']}</td>
-                <td>{item['last_price']}</td>
-                <td>{item['prev_price']}</td>
-                <td>{item['shares']}</td>
-                <td>{float(item['weight']):.2f}%</td>
+                <td>{etf}</td>
+                <td>{full_name}</td>
+                <td>{last_price}</td>
+                <td>{prev_price}</td>
+                <td>{shares}</td>
+                <td>{float(weight) if weight and weight != 'N/A' else 'N/A'}%</td>
             </tr>
             """
     html += """
@@ -1078,16 +1090,21 @@ def etf_holdings():
 
     if ticker:
         response = get_api_data(ETF_HOLDINGS_API_URL.format(ticker=ticker))
+        print(f"ETF Holdings API Response for {ticker}: {response}")  # Log the full response for debugging
         if "error" in response:
             error = response["error"]
         else:
             data = response.get("data", [])
+            if not isinstance(data, list):  # Ensure data is a list
+                error = f"Unexpected API response format: data is not a list, got {type(data)}"
+                data = None
 
     # Fetch ETF Info for the info bar
     etf_info = None
     etf_info_error = None
     if ticker:
         etf_info_response = get_api_data(ETF_INFO_API_URL.format(ticker=ticker))
+        print(f"ETF Info API Response for {ticker}: {etf_info_response}")  # Log the full response
         if "error" in etf_info_response:
             etf_info_error = etf_info_response["error"]
         else:
@@ -1137,13 +1154,19 @@ def etf_holdings():
     """
     if data:
         for item in data:
+            # Add fallback values for missing keys to prevent KeyError
+            ticker_val = item.get('ticker', 'N/A')
+            name = item.get('name', 'N/A')
+            shares = item.get('shares', 'N/A')
+            weight = item.get('weight', 'N/A')
+            market_value = item.get('market_value', 'N/A')
             html += f"""
             <tr>
-                <td>{item['ticker']}</td>
-                <td>{item['name']}</td>
-                <td>{item['shares']}</td>
-                <td>{float(item['weight']):.2f}%</td>
-                <td>{item['market_value']}</td>
+                <td>{ticker_val}</td>
+                <td>{name}</td>
+                <td>{shares}</td>
+                <td>{float(weight) if weight and weight != 'N/A' else 'N/A'}%</td>
+                <td>{market_value}</td>
             </tr>
             """
     html += """
