@@ -19,7 +19,7 @@ def get_api_data(url, params=None):
         response = requests.get(url, headers=headers, params=params)
         response.raise_for_status()
         print(f"Response Status Code: {response.status_code}")
-        print(f"Response Headers: {dict(response.headers)}")  # Exclude sensitive headers if needed
+        print(f"Response Headers: {dict(response.headers)}")
         return response.json()
     except (requests.RequestException, json.JSONDecodeError) as e:
         print(f"Request Error - URL: {url}, Status Code: {getattr(response, 'status_code', 'N/A')}, Error: {str(e)}")
@@ -71,7 +71,6 @@ def institution_list():
         institutions = data.get("data", []) if isinstance(data, dict) else data
         for inst in institutions:
             name = inst if isinstance(inst, str) else inst.get('name', 'N/A')
-            # Note: Using name as ticker might not work; consider mapping to a ticker if needed
             html += f"<tr><td><a href='#' onclick='showHoldings(\"{name}\")'>{name}</a></td><td>{get_live_stock_price(name)}</td></tr>"
     html += """
         </table>
@@ -146,7 +145,6 @@ def research():
 
     inst_names = sorted(inst_totals.keys(), key=lambda x: inst_totals[x], reverse=True)[:10]
 
-    # Fixed syntax error in table header
     table_html = "<table border='1' id='masterTable'><tr><th>Ticker</th><th>Total Units</th><th>Live Stock Price</th>"
     for name in inst_names:
         table_html += f"<th>{name}</th>"
@@ -156,7 +154,6 @@ def research():
     for ticker, inst_holdings in holdings_master.items():
         total_units = sum(inst_holdings.values())
         live_price = get_live_stock_price(ticker)
-        # Fixed syntax error in table row
         table_html += f"<tr><td>{ticker}</td><td>{total_units}</td><td>{live_price if isinstance(live_price, (int, float)) else live_price}</td>"
         for name in inst_names:
             units = inst_holdings.get(name, 0)
@@ -476,11 +473,21 @@ def seasonality_etf_market():
     if ticker != 'ALL' and yearly_performance and "error" not in yearly_performance:
         html += f"""
         <h2>Yearly Performance for {ticker}</h2>
-        <canvas id="yearlyPerformanceChart" width="600" height="300"></canvas>
+        <div style="display: flex; justify-content: space-around; margin-top: 20px;">
+            <div>
+                <h3>Line Chart</h3>
+                <canvas id="yearlyLineChart" width="300" height="200"></canvas>
+            </div>
+            <div>
+                <h3>Bar Chart</h3>
+                <canvas id="yearlyBarChart" width="300" height="200"></canvas>
+            </div>
+        </div>
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
         <script>
-            const ctx = document.getElementById('yearlyPerformanceChart').getContext('2d');
-            const chart = new Chart(ctx, {{
+            // Line Chart
+            const lineCtx = document.getElementById('yearlyLineChart').getContext('2d');
+            const lineChart = new Chart(lineCtx, {{
                 type: 'line',
                 data: {{
                     labels: {json.dumps(years)},
@@ -490,13 +497,44 @@ def seasonality_etf_market():
                         borderColor: 'rgba(75, 192, 192, 1)',
                         backgroundColor: 'rgba(75, 192, 192, 0.2)',
                         fill: true,
-                        tension: 0.1
+                        tension: 0.3,
+                        pointRadius: 3
                     }}]
                 }},
                 options: {{
+                    responsive: false,
                     scales: {{
-                        x: {{ title: {{ display: true, text: 'Year' }} }},
-                        y: {{ title: {{ display: true, text: 'Percentage Change (%)' }} }}
+                        x: {{ title: {{ display: true, text: 'Year' }}, ticks: {{ maxRotation: 45, minRotation: 45 }} }},
+                        y: {{ title: {{ display: true, text: '%' }}, beginAtZero: true }}
+                    }},
+                    plugins: {{
+                        legend: {{ display: false }}
+                    }}
+                }}
+            }});
+
+            // Bar Chart
+            const barCtx = document.getElementById('yearlyBarChart').getContext('2d');
+            const barChart = new Chart(barCtx, {{
+                type: 'bar',
+                data: {{
+                    labels: {json.dumps(years)},
+                    datasets: [{{
+                        label: 'Yearly % Change',
+                        data: {json.dumps(performance_values)},
+                        backgroundColor: performance_values.map(val => val >= 0 ? 'rgba(75, 192, 192, 0.7)' : 'rgba(255, 99, 132, 0.7)'),
+                        borderColor: performance_values.map(val => val >= 0 ? 'rgba(75, 192, 192, 1)' : 'rgba(255, 99, 132, 1)'),
+                        borderWidth: 1
+                    }}]
+                }},
+                options: {{
+                    responsive: false,
+                    scales: {{
+                        x: {{ title: {{ display: true, text: 'Year' }}, ticks: {{ maxRotation: 45, minRotation: 45 }} }},
+                        y: {{ title: {{ display: true, text: '%' }}, beginAtZero: true }}
+                    }},
+                    plugins: {{
+                        legend: {{ display: false }}
                     }}
                 }}
             }});
