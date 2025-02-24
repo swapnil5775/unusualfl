@@ -2,37 +2,50 @@
   "version": 2,
   "builds": [
     {
-      "src": "seasonality.py",
-      "use": "@vercel/python"
-    },
-    {
-      "src": "seasonality_etf.py",
+      "src": "app.py",
       "use": "@vercel/python"
     }
   ],
   "routes": [
     {
       "src": "/seasonality",
-      "dest": "seasonality.py"
+      "dest": "app.py"
     },
     {
       "src": "/seasonality/per-ticker",
-      "dest": "seasonality.py"
+      "dest": "app.py"
     },
     {
       "src": "/seasonality/etf-market",
-      "dest": "seasonality_etf.py"
+      "dest": "app.py"
     },
     {
       "src": "/api/ai-summary",
-      "dest": "seasonality_etf.py"
+      "dest": "app.py"
+    },
+    {
+      "src": "/etf-research",
+      "dest": "app.py"
+    },
+    {
+      "src": "/institution/list",
+      "dest": "app.py"
+    },
+    {
+      "src": "/research",
+      "dest": "app.py"
     },
     {
       "src": "/(.*)",
-      "dest": "seasonality.py"
+      "dest": "app.py"
     }
   ],
   "env": {
     "PORT": "5000"
-  }
+  },
+  "excludeFiles": [
+    "__pycache__/**",
+    "*.log",
+    "*.txt"
+  ]
 }
