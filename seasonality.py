@@ -1,11 +1,5 @@
 from flask import Blueprint, render_template_string, request
 from common import get_api_data, get_live_stock_price, MENU_BAR, SEASONALITY_API_URL, SEASONALITY_MARKET_API_URL, ETF_INFO_API_URL
-import yfinance as yf
-from datetime import datetime, timedelta
-import plotly.graph_objs as go
-from plotly.utils import PlotlyJSONEncoder
-import json
-import pandas as pd
 import logging
 
 # Configure logging
@@ -393,9 +387,6 @@ def seasonality_etf_market():
     ticker = request.args.get('ticker', 'ALL').upper()
     data = None
     error = None
-    yearly_performance = None
-    yearly_prices = None
-    price_data = None  # For price action over the last year
 
     response = get_api_data(SEASONALITY_MARKET_API_URL)
     if "error" in response:
@@ -405,95 +396,13 @@ def seasonality_etf_market():
         all_data = response.get("data", [])
         data = [item for item in all_data if item['ticker'] == ticker] if ticker != 'ALL' else all_data
 
-    if ticker != 'ALL':
-        try:
-            # Fetch ETF data using yfinance
-            stock = yf.Ticker(ticker)
-            
-            # Get price data for the last year (Price Action Yearly)
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=365)
-            price_data = stock.history(start=start_date, end=end_date)
-            
-            # Convert Timestamp indices to strings for JSON serialization
-            if price_data is not None and not price_data.empty:
-                price_data.index = price_data.index.strftime('%Y-%m-%d')
-            
-            # Get historical data for 5 years to calculate yearly performance
-            hist = stock.history(period="5y", interval="1mo")
-            # Yearly performance (% change) - use 'YE' instead of 'Y'
-            yearly_performance = hist['Close'].resample('YE').last().pct_change().dropna() * 100
-            yearly_performance = yearly_performance.to_dict() if yearly_performance else {}
-            years = [dt.strftime('%Y') for dt in yearly_performance.keys()] if yearly_performance else []
-            performance_values = list(yearly_performance.values()) if yearly_performance else []
-            # Yearly closing prices - use 'YE' instead of 'Y'
-            yearly_prices = hist['Close'].resample('YE').last().dropna().to_dict()
-            price_years = [dt.strftime('%Y') for dt in yearly_prices.keys()] if yearly_prices else []
-            price_values = list(yearly_prices.values()) if yearly_prices else []
-            logger.info(f"Processed data for ticker {ticker}: years={years}, price_years={price_years}")
-        except Exception as e:
-            error = f"Error fetching Yahoo Finance data for {ticker}: {str(e)}"
-            logger.error(error)
-
-    # Removed ETF Info fetching since it's no longer needed on this page
-    # etf_info = None
-    # etf_info_error = None
-    # if ticker != 'ALL':
-    #     etf_info_response = get_api_data(ETF_INFO_API_URL.format(ticker=ticker))
-    #     if "error" in etf_info_response:
-    #         etf_info_error = etf_info_response["error"]
-    #         logger.error(f"ETF Info API Error for {ticker}: {etf_info_error}")
-    #     else:
-    #         etf_info = etf_info_response.get("data", {})  # Get the dictionary under "data"
-
-    # Serialize JSON data for JavaScript
-    common_years = []
-    performance_values_filtered = []
-    price_values_filtered = []
-    if ticker != 'ALL' and yearly_performance and yearly_prices and not error:
-        # Ensure years are strings and handle empty lists
-        if years and price_years:
-            common_years = sorted(list(set(years) & set(price_years)))
-            # Safely handle indexing with defaults
-            performance_values_filtered = [
-                performance_values[years.index(year)] if year in years and years.index(year) < len(performance_values) else "N/A"
-                for year in common_years
-            ]
-            price_values_filtered = [
-                price_values[price_years.index(year)] if year in price_years and price_years.index(year) < len(price_values) else "N/A"
-                for year in common_years
-            ]
-        else:
-            common_years = []
-            performance_values_filtered = []
-            price_values_filtered = []
-            logger.warning(f"No yearly data available for ticker {ticker}")
-
-    price_data_json = None
-    if price_data is not None and not price_data.empty:
-        # Convert the DataFrame to a dictionary with string indices
-        price_data_dict = price_data.to_dict()
-        for column in price_data_dict:
-            price_data_dict[column] = {str(k): v for k, v in price_data_dict[column].items()}
-        price_data_json = json.dumps(price_data_dict)
-    else:
-        price_data_json = None
-        if ticker != 'ALL':
-            logger.warning(f"No price data available for ticker {ticker}")
-
     etf_tickers = ['SPY', 'QQQ', 'IWM', 'XLE', 'XLC', 'XLK', 'XLV', 'XLP', 'XLY', 'XLRE', 'XLF', 'XLI', 'XLB']
 
-    # Prepare context for Jinja2 templating, removing etf_info and etf_info_error
+    # Prepare context for Jinja2 templating, using only seasonality data
     context = {
         'ticker': ticker,
         'data': data,
         'error': error,
-        'yearly_performance': yearly_performance,
-        'yearly_prices': yearly_prices,
-        'price_data_json': price_data_json,
-        'common_years': common_years,
-        'performance_values_filtered': performance_values_filtered,
-        'price_values_filtered': price_values_filtered,
         'etf_tickers': etf_tickers,
         'MENU_BAR': MENU_BAR
     }
@@ -501,12 +410,11 @@ def seasonality_etf_market():
     html = """
     <h1>Seasonality - ETF Market</h1>
     {{ MENU_BAR | safe }}
-    <div style="min-width: 300px;">  <!-- Simplified to a single div for content -->
+    <div style="min-width: 300px;">
         <h3>Select ETF or View All:</h3>
         <div>
             <button onclick="window.location.href='/seasonality/etf-market?ticker=ALL'">ALL</button>
     """
-    # Fix button URLs to ensure proper navigation
     for t in etf_tickers:
         html += f"""
             <button onclick="window.location.href='/seasonality/etf-market?ticker={t}'">{t}</button>
@@ -563,65 +471,7 @@ def seasonality_etf_market():
 
     html += """
         </table>
-    """
-
-    if ticker != 'ALL':
-        html += f"""
-        <h2>Yearly Analysis for {{ ticker }}</h2>
-        <div style="display: flex; flex-wrap: wrap; justify-content: space-around; margin-top: 20px; gap: 20px;">
-            <div style="flex: 1; min-width: 300px; max-width: 400px;" class="resizable-chart">
-                <h3>Price Action (Yearly)</h3>
-                <div id="priceChart" style="width: 100%; height: 400px;"></div>
-            </div>
-            <div style="flex: 1; min-width: 300px; max-width: 400px;" class="resizable-chart">
-                <h3>Yearly Performance (Bar Chart)</h3>
-                <div id="performanceChart" style="width: 100%; height: 300px;"></div>
-            </div>
-            <div style="flex: 1; min-width: 300px; max-width: 400px;" class="resizable-chart">
-                <h3>Combined Price Action and Yearly Performance</h3>
-                <div id="combinedChart" style="width: 100%; height: 500px;"></div>
-            </div>
-        </div>
-
-        <h2>Yearly Data for {{ ticker }}</h2>
-        <table border='1' id="yearlyDataTable">
-            <tr>
-                <th>Year</th>
-                <th>Yearly % Change</th>
-                <th>Yearly Closing Price ($)</th>
-            </tr>
-        """
-        # Ensure common_years is not empty and contains strings
-        if common_years:
-            for year in common_years:
-                # Ensure year is a string and handle potential mismatches
-                year_str = str(year)  # Convert to string if not already
-                perf_idx = years.index(year_str) if year_str in years and years else -1
-                price_idx = price_years.index(year_str) if year_str in price_years and price_years else -1
-                perf_value = (
-                    performance_values[perf_idx] if perf_idx != -1 and perf_idx < len(performance_values) else "N/A"
-                )
-                price_value = (
-                    price_values[price_idx] if price_idx != -1 and price_idx < len(price_values) else "N/A"
-                )
-                html += f"""
-                <tr>
-                    <td>{year_str}</td>
-                    <td>{perf_value:.2f}%</td>
-                    <td>${price_value:.2f}</td>
-                </tr>
-                """
-        else:
-            html += "<tr><td colspan='3'>No yearly data available</td></tr>"
-        html += """
-        </table>
-        """
-    elif ticker != 'ALL' and error:
-        html += f"<p style='color: red;'>{{ error }}</p>"
-
-    html += """
     </div>
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <script>
         let sortState = { col: 'ticker', dir: 'asc' };
 
@@ -638,91 +488,6 @@ def seasonality_etf_market():
             sortState.col = sortCol;
             sortState.dir = sortDir;
         }
-
-        // Chart Data
-        const priceData = {{ price_data_json | safe }};
-        const commonYears = {{ common_years | tojson }};
-        const performanceValuesFiltered = {{ performance_values_filtered | tojson }};
-        const priceValuesFiltered = {{ price_values_filtered | tojson }};
-
-        // Price Action Yearly (Line Chart)
-        if (priceData) {
-            const priceTrace = {
-                x: Object.keys(priceData['Close']),
-                y: Object.values(priceData['Close']),
-                type: 'scatter',
-                mode: 'lines',
-                name: 'Price'
-            };
-            const priceLayout = {
-                title: 'Yearly Price Action for {{ ticker }}',
-                xaxis: { title: 'Date' },
-                yaxis: { title: 'Price ($)' },
-                autosize: true
-            };
-            Plotly.newPlot('priceChart', [priceTrace], priceLayout, { responsive: true, displayModeBar: true });
-        }
-
-        // Yearly Performance (Bar Chart)
-        if (performanceValuesFiltered.length > 0) {
-            const performanceTrace = {
-                x: commonYears,
-                y: performanceValuesFiltered,
-                type: 'bar',
-                name: 'Yearly Return (%)'
-            };
-            const performanceLayout = {
-                title: 'Yearly Performance for {{ ticker }}',
-                xaxis: { title: 'Year' },
-                yaxis: { title: 'Return (%)' },
-                autosize: true
-            };
-            Plotly.newPlot('performanceChart', [performanceTrace], performanceLayout, { responsive: true, displayModeBar: true });
-        }
-
-        // Combined Price Action and Yearly Performance
-        if (priceData && performanceValuesFiltered.length > 0) {
-            const combinedPriceTrace = {
-                x: Object.keys(priceData['Close']),
-                y: Object.values(priceData['Close']),
-                type: 'scatter',
-                mode: 'lines',
-                name: 'Price',
-                yaxis: 'y1'
-            };
-            const combinedPerformanceTrace = {
-                x: common_years,
-                y: performanceValuesFiltered,
-                type: 'bar',
-                name: 'Yearly Return (%)',
-                yaxis: 'y2'
-            };
-            const combinedLayout = {
-                title: 'Combined Price Action and Yearly Performance for {{ ticker }}',
-                xaxis: { title: 'Date/Year' },
-                yaxis: { title: 'Price ($)', side: 'left' },
-                yaxis2: { title: 'Return (%)', side: 'right', overlaying: 'y', showgrid: false },
-                autosize: true
-            };
-            Plotly.newPlot('combinedChart', [combinedPriceTrace, combinedPerformanceTrace], combinedLayout, { responsive: true, displayModeBar: true });
-        }
-
-        // Make charts resizable and zoomable
-        document.querySelectorAll('.plotly-graph-div').forEach(chart => {
-            chart.style.resize = 'both';
-            chart.style.overflow = 'auto';
-            chart.on('plotly_relayout', function(eventData) {
-                Plotly.relayout(chart, eventData);
-            });
-        });
-
-        // Ensure resizable divs maintain aspect ratio or allow manual resizing
-        document.querySelectorAll('.resizable-chart').forEach(div => {
-            div.style.minHeight = '200px';
-            div.style.maxHeight = '800px';
-            div.style.minWidth = '300px';
-            div.style.maxWidth = '600px';
-        });
     </script>
     """
     return render_template_string(html, **context)
