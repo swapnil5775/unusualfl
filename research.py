@@ -52,7 +52,6 @@ def research():
             table_html += f"<td>{percentage:.1f}%</td>"
         table_html += "</tr>"
         ticker_options += f"<option value='{ticker}'>{ticker}</option>"
-    table_html += "</table>"
 
     # Pie Chart HTML for Holdings
     pie_chart_html = f"""
@@ -120,7 +119,7 @@ def research():
 
     html = f"""
     <h1>Research</h1>
-    {MENU_BAR}
+    {{ MENU_BAR | safe }}
     <h2>All Institution Holdings</h2>
     {table_html}
     <h2>Top 10 Holdings by Institution</h2>
