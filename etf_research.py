@@ -82,8 +82,8 @@ def etf_exposure():
             <div>
                 <button onclick="window.location.href='/etf-research/exposure?ticker=SPY'">SPY</button>
                 <button onclick="window.location.href='/etf-research/exposure?ticker=QQQ'">QQQ</button>
-                <button onclick="window.location.href='/etf-research/exposure?ticker=IWM'">IWM</button>
-                <button onclick="window.location.href='/etf-research/exposure?ticker=XLF'">XLF</button>
+                <button onclick="window.location.href'/etf-research/exposure?ticker=IWM'">IWM</button>
+                <button onclick="window.location.href'/etf-research/exposure?ticker=XLF'">XLF</button>
             </div>
             {% if error %}<p style="color: red;">Error: {{ error }}</p>{% endif %}
             {% if not error and not data %}<p>No data available for ticker {{ ticker }}</p>{% endif %}
@@ -186,10 +186,10 @@ def etf_holdings():
             </form>
             <h3>Or Click a Predefined ETF:</h3>
             <div>
-                <button onclick="window.location.href'/etf-research/holdings?ticker=SPY'">SPY</button>
-                <button onclick="window.location.href'/etf-research/holdings?ticker=QQQ'">QQQ</button>
-                <button onclick="window.location.href'/etf-research/holdings?ticker=IWM'">IWM</button>
-                <button onclick="window.location.href'/etf-research/holdings?ticker=XLF'">XLF</button>
+                <button onclick="window.location.href='/etf-research/holdings?ticker=SPY'">SPY</button>
+                <button onclick="window.location.href='/etf-research/holdings?ticker=QQQ'">QQQ</button>
+                <button onclick="window.location.href='/etf-research/holdings?ticker=IWM'">IWM</button>
+                <button onclick="window.location.href='/etf-research/holdings?ticker=XLF'">XLF</button>
             </div>
             {% if error %}<p style="color: red;">Error: {{ error }}</p>{% endif %}
             {% if not error and not data %}<p>No data available for ticker {{ ticker }}</p>{% endif %}
