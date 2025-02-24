@@ -57,7 +57,7 @@ def etf_exposure():
 
     html = """
     <h1>ETF-Research - Exposure</h1>
-    {{ MENU_BAR }}
+    {{ MENU_BAR | safe }}
     <div style="display: flex; flex-wrap: wrap;">
         <div style="flex: 1; min-width: 300px; margin-bottom: 20px;">
             <h2>ETF Info for {{ ticker }}</h2>
@@ -163,7 +163,7 @@ def etf_holdings():
 
     html = """
     <h1>ETF-Research - Holdings</h1>
-    {{ MENU_BAR }}
+    {{ MENU_BAR | safe }}
     <div style="display: flex; flex-wrap: wrap;">
         <div style="flex: 1; min-width: 300px; margin-bottom: 20px;">
             <h2>ETF Info for {{ ticker }}</h2>
@@ -283,7 +283,7 @@ def etf_in_outflow():
 
     html = """
     <h1>ETF-Research - In-Out Flow</h1>
-    {{ MENU_BAR }}
+    {{ MENU_BAR | safe }}
     <div style="display: flex; flex-wrap: wrap;">
         <div style="flex: 1; min-width: 300px; margin-bottom: 20px;">
             <h2>ETF Info for {{ ticker }}</h2>
