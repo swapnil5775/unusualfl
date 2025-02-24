@@ -1,5 +1,10 @@
 from flask import Blueprint, render_template_string, request
 from common import get_api_data, get_live_stock_price, MENU_BAR, SEASONALITY_API_URL, SEASONALITY_MARKET_API_URL, ETF_INFO_API_URL
+import yfinance as yf
+from datetime import datetime, timedelta
+import plotly.graph_objs as go
+from plotly.utils import PlotlyJSONEncoder
+import json
 
 seasonality_bp = Blueprint('seasonality', __name__, url_prefix='/')
 
@@ -378,6 +383,7 @@ def seasonality_etf_market():
     error = None
     yearly_performance = None
     yearly_prices = None
+    price_data = None  # For price action over the last year
 
     response = get_api_data(SEASONALITY_MARKET_API_URL)
     if "error" in response:
@@ -389,8 +395,16 @@ def seasonality_etf_market():
 
     if ticker != 'ALL':
         try:
+            # Fetch ETF data using yfinance
             stock = yf.Ticker(ticker)
-            hist = stock.history(period="max", interval="1mo")
+            
+            # Get price data for the last year (Price Action Yearly)
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=365)
+            price_data = stock.history(start=start_date, end=end_date)
+            
+            # Get historical data for 5 years to calculate yearly performance
+            hist = stock.history(period="5y", interval="1mo")
             # Yearly performance (% change)
             yearly_performance = hist['Close'].resample('Y').last().pct_change().dropna() * 100
             yearly_performance = yearly_performance.to_dict()
@@ -401,8 +415,7 @@ def seasonality_etf_market():
             price_years = [dt.strftime('%Y') for dt in yearly_prices.keys()]
             price_values = list(yearly_prices.values())
         except Exception as e:
-            yearly_performance = {"error": f"Error fetching performance: {str(e)}"}
-            yearly_prices = {"error": f"Error fetching prices: {str(e)}"}
+            error = f"Error fetching Yahoo Finance data: {str(e)}"
 
     # Fetch ETF Info for the info bar (optional, only if ticker is valid and not 'ALL')
     etf_info = None
@@ -433,6 +446,7 @@ def seasonality_etf_market():
         'error': error,
         'yearly_performance': yearly_performance,
         'yearly_prices': yearly_prices,
+        'price_data_json': json.dumps(price_data.to_dict()) if price_data is not None else None,
         'common_years': common_years,
         'performance_values_filtered': performance_values_filtered,
         'price_values_filtered': price_values_filtered,
@@ -522,27 +536,24 @@ def seasonality_etf_market():
             </table>
     """
 
-    if ticker != 'ALL' and yearly_performance and "error" not in yearly_performance and yearly_prices and "error" not in yearly_prices:
+    if ticker != 'ALL':
         html += f"""
         <h2>Yearly Analysis for {{ ticker }}</h2>
         <div style="display: flex; flex-wrap: wrap; justify-content: space-around; margin-top: 20px; gap: 20px;">
-            <div style="flex: 1; min-width: 300px; max-width: 400px;">
-                <h3>Price Action (Line)</h3>
-                <canvas id="yearlyPriceChart"></canvas>
+            <div style="flex: 1; min-width: 300px; max-width: 400px;" class="resizable-chart">
+                <h3>Price Action (Yearly)</h3>
+                <div id="priceChart" style="width: 100%; height: 400px;"></div>
             </div>
-            <div style="flex: 1; min-width: 300px; max-width: 400px;">
-                <h3>Performance (Bar)</h3>
-                <canvas id="yearlyBarChart"></canvas>
+            <div style="flex: 1; min-width: 300px; max-width: 400px;" class="resizable-chart">
+                <h3>Yearly Performance (Bar Chart)</h3>
+                <div id="performanceChart" style="width: 100%; height: 300px;"></div>
             </div>
-            <div style="flex: 1; min-width: 300px; max-width: 400px;">
-                <h3>Combined Performance & Price</h3>
-                <canvas id="combinedChart"></canvas>
+            <div style="flex: 1; min-width: 300px; max-width: 400px;" class="resizable-chart">
+                <h3>Combined Price Action and Yearly Performance</h3>
+                <div id="combinedChart" style="width: 100%; height: 500px;"></div>
             </div>
         </div>
-        """
 
-        # Add Yearly Table below the charts
-        html += f"""
         <h2>Yearly Data for {{ ticker }}</h2>
         <table border='1' id="yearlyDataTable">
             <tr>
@@ -571,7 +582,7 @@ def seasonality_etf_market():
 
     html += """
     </div>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <script>
         let sortState = { col: 'ticker', dir: 'asc' };
 
@@ -589,121 +600,89 @@ def seasonality_etf_market():
             sortState.dir = sortDir;
         }
 
-        // Chart.js Data
+        // Chart Data
+        const priceData = {{ price_data_json | safe }};
         const commonYears = {{ common_years | tojson }};
         const performanceValuesFiltered = {{ performance_values_filtered | tojson }};
         const priceValuesFiltered = {{ price_values_filtered | tojson }};
-        const performanceColors = performanceValuesFiltered.map(val => val >= 0 ? 'rgba(75, 192, 192, 0.7)' : 'rgba(255, 99, 132, 0.7)');
-        const performanceBorderColors = performanceValuesFiltered.map(val => val >= 0 ? 'rgba(75, 192, 192, 1)' : 'rgba(255, 99, 132, 1)');
 
-        // Price Action Line Chart
-        const priceCtx = document.getElementById('yearlyPriceChart').getContext('2d');
-        new Chart(priceCtx, {
-            type: 'line',
-            data: {
-                labels: commonYears,
-                datasets: [{
-                    label: 'Yearly Closing Price',
-                    data: priceValuesFiltered,
-                    borderColor: 'rgba(54, 162, 235, 1)',
-                    backgroundColor: 'rgba(54, 162, 235, 0.2)',
-                    fill: true,
-                    tension: 0.3,
-                    pointRadius: 3
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                scales: {
-                    x: { title: { display: true, text: 'Year' }, ticks: { maxRotation: 45, minRotation: 45 } },
-                    y: { title: { display: true, text: 'Price ($)' }, beginAtZero: true }
-                },
-                plugins: {
-                    legend: { display: false }
-                }
-            }
+        // Price Action Yearly (Line Chart)
+        if (priceData) {
+            const priceTrace = {
+                x: Object.keys(priceData['Close']),
+                y: Object.values(priceData['Close']),
+                type: 'scatter',
+                mode: 'lines',
+                name: 'Price'
+            };
+            const priceLayout = {
+                title: 'Yearly Price Action for {{ ticker }}',
+                xaxis: { title: 'Date' },
+                yaxis: { title: 'Price ($)' },
+                autosize: true
+            };
+            Plotly.newPlot('priceChart', [priceTrace], priceLayout, { responsive: true, displayModeBar: true });
+        }
+
+        // Yearly Performance (Bar Chart)
+        if (performanceValuesFiltered.length > 0) {
+            const performanceTrace = {
+                x: commonYears,
+                y: performanceValuesFiltered,
+                type: 'bar',
+                name: 'Yearly Return (%)'
+            };
+            const performanceLayout = {
+                title: 'Yearly Performance for {{ ticker }}',
+                xaxis: { title: 'Year' },
+                yaxis: { title: 'Return (%)' },
+                autosize: true
+            };
+            Plotly.newPlot('performanceChart', [performanceTrace], performanceLayout, { responsive: true, displayModeBar: true });
+        }
+
+        // Combined Price Action and Yearly Performance
+        if (priceData && performanceValuesFiltered.length > 0) {
+            const combinedPriceTrace = {
+                x: Object.keys(priceData['Close']),
+                y: Object.values(priceData['Close']),
+                type: 'scatter',
+                mode: 'lines',
+                name: 'Price',
+                yaxis: 'y1'
+            };
+            const combinedPerformanceTrace = {
+                x: commonYears,
+                y: performanceValuesFiltered,
+                type: 'bar',
+                name: 'Yearly Return (%)',
+                yaxis: 'y2'
+            };
+            const combinedLayout = {
+                title: 'Combined Price Action and Yearly Performance for {{ ticker }}',
+                xaxis: { title: 'Date/Year' },
+                yaxis: { title: 'Price ($)', side: 'left' },
+                yaxis2: { title: 'Return (%)', side: 'right', overlaying: 'y', showgrid: false },
+                autosize: true
+            };
+            Plotly.newPlot('combinedChart', [combinedPriceTrace, combinedPerformanceTrace], combinedLayout, { responsive: true, displayModeBar: true });
+        }
+
+        // Make charts resizable and zoomable
+        document.querySelectorAll('.plotly-graph-div').forEach(chart => {
+            chart.style.resize = 'both';
+            chart.style.overflow = 'auto';
+            chart.on('plotly_relayout', function(eventData) {
+                Plotly.relayout(chart, eventData);
+            });
         });
 
-        // Performance Bar Chart
-        const barCtx = document.getElementById('yearlyBarChart').getContext('2d');
-        new Chart(barCtx, {
-            type: 'bar',
-            data: {
-                labels: commonYears,
-                datasets: [{
-                    label: 'Yearly % Change',
-                    data: performanceValuesFiltered,
-                    backgroundColor: performanceColors,
-                    borderColor: performanceBorderColors,
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                scales: {
-                    x: { title: { display: true, text: 'Year' }, ticks: { maxRotation: 45, minRotation: 45 } },
-                    y: { title: { display: true, text: '%' }, beginAtZero: true }
-                },
-                plugins: {
-                    legend: { display: false }
-                }
-            }
-        });
-
-        // Combined Chart (Price Line + Performance Bars)
-        const combinedCtx = document.getElementById('combinedChart').getContext('2d');
-        new Chart(combinedCtx, {
-            type: 'bar',
-            data: {
-                labels: commonYears,
-                datasets: [
-                    {
-                        type: 'line',
-                        label: 'Yearly Closing Price',
-                        data: priceValuesFiltered,
-                        borderColor: 'rgba(54, 162, 235, 1)',
-                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
-                        fill: true,
-                        tension: 0.3,
-                        pointRadius: 3,
-                        yAxisID: 'y2'
-                    },
-                    {
-                        type: 'bar',
-                        label: 'Yearly % Change',
-                        data: performanceValuesFiltered,
-                        backgroundColor: performanceColors,
-                        borderColor: performanceBorderColors,
-                        borderWidth: 1,
-                        yAxisID: 'y1'
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                scales: {
-                    x: { title: { display: true, text: 'Year' }, ticks: { maxRotation: 45, minRotation: 45 } },
-                    y1: { 
-                        type: 'linear', 
-                        position: 'left', 
-                        title: { display: true, text: '%' },
-                        beginAtZero: true
-                    },
-                    y2: { 
-                        type: 'linear', 
-                        position: 'right', 
-                        title: { display: true, text: 'Price ($)' },
-                        beginAtZero: true,
-                        grid: { drawOnChartArea: false }
-                    }
-                },
-                plugins: {
-                    legend: { display: true, position: 'top' }
-                }
-            }
+        // Ensure resizable divs maintain aspect ratio or allow manual resizing
+        document.querySelectorAll('.resizable-chart').forEach(div => {
+            div.style.minHeight = '200px';
+            div.style.maxHeight = '800px';
+            div.style.minWidth = '300px';
+            div.style.maxWidth = '600px';
         });
     </script>
     """
