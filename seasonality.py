@@ -55,11 +55,11 @@ def seasonality_per_ticker():
             hist = stock.history(period="max", interval="1mo")
             yearly_performance = hist['Close'].resample('YE').last().pct_change().dropna() * 100
             yearly_performance = yearly_performance.to_dict()
-            years = [dt.strftime('%Y') for dt in yearly_performance.keys()]
-            performance_values = list(yearly_performance.values())
+            years = [dt.strftime('%Y') for dt in yearly_performance.keys()] if yearly_performance else []
+            performance_values = list(yearly_performance.values()) if yearly_performance else []
             yearly_prices = hist['Close'].resample('YE').last().dropna().to_dict()
-            price_years = [dt.strftime('%Y') for dt in yearly_prices.keys()]
-            price_values = list(yearly_prices.values())
+            price_years = [dt.strftime('%Y') for dt in yearly_prices.keys()] if yearly_prices else []
+            price_values = list(yearly_prices.values()) if yearly_prices else []
         except Exception as e:
             yearly_performance = {"error": f"Error fetching performance: {str(e)}"}
             yearly_prices = {"error": f"Error fetching prices: {str(e)}"}
@@ -81,8 +81,14 @@ def seasonality_per_ticker():
     if ticker and yearly_performance and "error" not in yearly_performance and yearly_prices and "error" not in yearly_prices:
         common_years = list(set(years) & set(price_years))
         common_years.sort()
-        performance_values_filtered = [performance_values[years.index(year)] for year in common_years if year in years]
-        price_values_filtered = [price_values[price_years.index(year)] for year in common_years if year in price_years]
+        performance_values_filtered = [
+            performance_values[years.index(year)] if year in years and years.index(year) < len(performance_values) else "N/A"
+            for year in common_years
+        ]
+        price_values_filtered = [
+            price_values[price_years.index(year)] if year in price_years and price_years.index(year) < len(price_values) else "N/A"
+            for year in common_years
+        ]
 
     # Prepare context for Jinja2 templating
     context = {
@@ -439,8 +445,7 @@ def seasonality_etf_market():
     if ticker != 'ALL' and yearly_performance and yearly_prices and not error:
         # Ensure years are strings and handle empty lists
         if years and price_years:
-            common_years = list(set(years) & set(price_years))
-            common_years.sort()
+            common_years = sorted(list(set(years) & set(price_years)))
             # Safely handle indexing with defaults
             performance_values_filtered = [
                 performance_values[years.index(year)] if year in years and years.index(year) < len(performance_values) else "N/A"
@@ -506,9 +511,10 @@ def seasonality_etf_market():
             <div>
                 <button onclick="window.location.href='/seasonality/etf-market?ticker=ALL'">ALL</button>
     """
+    # Fix button URLs to ensure proper navigation
     for t in etf_tickers:
         html += f"""
-            <button onclick="window.location.href'/seasonality/etf-market?ticker={t}'">{t}</button>
+            <button onclick="window.location.href='/seasonality/etf-market?ticker={t}'">{t}</button>
         """
     html += """
             </div>
@@ -595,10 +601,14 @@ def seasonality_etf_market():
             for year in common_years:
                 # Ensure year is a string and handle potential mismatches
                 year_str = str(year)  # Convert to string if not already
-                perf_idx = years.index(year_str) if year_str in years else -1
-                price_idx = price_years.index(year_str) if year_str in price_years else -1
-                perf_value = performance_values[perf_idx] if perf_idx != -1 and perf_idx < len(performance_values) else "N/A"
-                price_value = price_values[price_idx] if price_idx != -1 and price_idx < len(price_values) else "N/A"
+                perf_idx = years.index(year_str) if year_str in years and years else -1
+                price_idx = price_years.index(year_str) if year_str in price_years and price_years else -1
+                perf_value = (
+                    performance_values[perf_idx] if perf_idx != -1 and perf_idx < len(performance_values) else "N/A"
+                )
+                price_value = (
+                    price_values[price_idx] if price_idx != -1 and price_idx < len(price_values) else "N/A"
+                )
                 html += f"""
                 <tr>
                     <td>{year_str}</td>
