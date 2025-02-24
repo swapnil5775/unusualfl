@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import plotly.graph_objs as go
 from plotly.utils import PlotlyJSONEncoder
 import json
+import pandas as pd
 
 seasonality_bp = Blueprint('seasonality', __name__, url_prefix='/')
 
@@ -52,11 +53,11 @@ def seasonality_per_ticker():
         try:
             stock = yf.Ticker(ticker)
             hist = stock.history(period="max", interval="1mo")
-            yearly_performance = hist['Close'].resample('Y').last().pct_change().dropna() * 100
+            yearly_performance = hist['Close'].resample('YE').last().pct_change().dropna() * 100
             yearly_performance = yearly_performance.to_dict()
             years = [dt.strftime('%Y') for dt in yearly_performance.keys()]
             performance_values = list(yearly_performance.values())
-            yearly_prices = hist['Close'].resample('Y').last().dropna().to_dict()
+            yearly_prices = hist['Close'].resample('YE').last().dropna().to_dict()
             price_years = [dt.strftime('%Y') for dt in yearly_prices.keys()]
             price_values = list(yearly_prices.values())
         except Exception as e:
@@ -403,15 +404,19 @@ def seasonality_etf_market():
             start_date = end_date - timedelta(days=365)
             price_data = stock.history(start=start_date, end=end_date)
             
+            # Convert Timestamp indices to strings for JSON serialization
+            if price_data is not None and not price_data.empty:
+                price_data.index = price_data.index.strftime('%Y-%m-%d')
+            
             # Get historical data for 5 years to calculate yearly performance
             hist = stock.history(period="5y", interval="1mo")
-            # Yearly performance (% change)
-            yearly_performance = hist['Close'].resample('Y').last().pct_change().dropna() * 100
+            # Yearly performance (% change) - use 'YE' instead of 'Y'
+            yearly_performance = hist['Close'].resample('YE').last().pct_change().dropna() * 100
             yearly_performance = yearly_performance.to_dict()
             years = [dt.strftime('%Y') for dt in yearly_performance.keys()]
             performance_values = list(yearly_performance.values())
-            # Yearly closing prices
-            yearly_prices = hist['Close'].resample('Y').last().dropna().to_dict()
+            # Yearly closing prices - use 'YE' instead of 'Y'
+            yearly_prices = hist['Close'].resample('YE').last().dropna().to_dict()
             price_years = [dt.strftime('%Y') for dt in yearly_prices.keys()]
             price_values = list(yearly_prices.values())
         except Exception as e:
@@ -437,6 +442,16 @@ def seasonality_etf_market():
         performance_values_filtered = [performance_values[years.index(year)] for year in common_years if year in years]
         price_values_filtered = [price_values[price_years.index(year)] for year in common_years if year in price_years]
 
+    price_data_json = None
+    if price_data is not None and not price_data.empty:
+        # Convert the DataFrame to a dictionary with string indices
+        price_data_dict = price_data.to_dict()
+        for column in price_data_dict:
+            price_data_dict[column] = {str(k): v for k, v in price_data_dict[column].items()}
+        price_data_json = json.dumps(price_data_dict)
+    else:
+        price_data_json = None
+
     etf_tickers = ['SPY', 'QQQ', 'IWM', 'XLE', 'XLC', 'XLK', 'XLV', 'XLP', 'XLY', 'XLRE', 'XLF', 'XLI', 'XLB']
 
     # Prepare context for Jinja2 templating
@@ -446,7 +461,7 @@ def seasonality_etf_market():
         'error': error,
         'yearly_performance': yearly_performance,
         'yearly_prices': yearly_prices,
-        'price_data_json': json.dumps(price_data.to_dict()) if price_data is not None else None,
+        'price_data_json': price_data_json,
         'common_years': common_years,
         'performance_values_filtered': performance_values_filtered,
         'price_values_filtered': price_values_filtered,
@@ -577,8 +592,8 @@ def seasonality_etf_market():
         html += """
         </table>
         """
-    elif ticker != 'ALL' and (yearly_performance and "error" in yearly_performance or yearly_prices and "error" in yearly_prices):
-        html += f"<p style='color: red;'>{{ yearly_performance.get('error', '') + ' ' + yearly_prices.get('error', '') if yearly_performance or yearly_prices else '' }}</p>"
+    elif ticker != 'ALL' and error:
+        html += f"<p style='color: red;'>{{ error }}</p>"
 
     html += """
     </div>
