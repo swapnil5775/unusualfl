@@ -68,7 +68,7 @@ def etf_exposure():
     if etf_info:
         for key, value in etf_info.items():
             if value is not None:  # Skip None values
-                html += f"<tr><td>{key.replace('_', ' ').title()}</td><td>{{ {{ value }} }}</td></tr>"
+                html += f"<tr><td>{key.replace('_', ' ').title()}</td><td>{{ etf_info['{key}'] }}</td></tr>"
     html += """
             </table>
         </div>
@@ -174,7 +174,7 @@ def etf_holdings():
     if etf_info:  # Check if etf_info is not None or empty
         for key, value in etf_info.items():
             if value is not None:  # Skip None values
-                html += f"<tr><td>{key.replace('_', ' ').title()}</td><td>{{ {{ value }} }}</td></tr>"
+                html += f"<tr><td>{key.replace('_', ' ').title()}</td><td>{{ etf_info['{key}'] }}</td></tr>"
     html += """
             </table>
         </div>
@@ -186,7 +186,7 @@ def etf_holdings():
             </form>
             <h3>Or Click a Predefined ETF:</h3>
             <div>
-                <button onclick="window.location.href='/etf-research/holdings?ticker=SPY'">SPY</button>
+                <button onclick="window.location.href'/etf-research/holdings?ticker=SPY'">SPY</button>
                 <button onclick="window.location.href'/etf-research/holdings?ticker=QQQ'">QQQ</button>
                 <button onclick="window.location.href'/etf-research/holdings?ticker=IWM'">IWM</button>
                 <button onclick="window.location.href'/etf-research/holdings?ticker=XLF'">XLF</button>
@@ -294,7 +294,7 @@ def etf_in_outflow():
     if etf_info:  # Check if etf_info is not None or empty
         for key, value in etf_info.items():
             if value is not None:  # Skip None values
-                html += f"<tr><td>{key.replace('_', ' ').title()}</td><td>{{ {{ value }} }}</td></tr>"
+                html += f"<tr><td>{key.replace('_', ' ').title()}</td><td>{{ etf_info['{key}'] }}</td></tr>"
     html += """
             </table>
         </div>
@@ -306,7 +306,7 @@ def etf_in_outflow():
             </form>
             <h3>Or Click a Predefined ETF:</h3>
             <div>
-                <button onclick="window.location.href='/etf-research/in-outflow?ticker=SPY'">SPY</button>
+                <button onclick="window.location.href'/etf-research/in-outflow?ticker=SPY'">SPY</button>
                 <button onclick="window.location.href'/etf-research/in-outflow?ticker=QQQ'">QQQ</button>
                 <button onclick="window.location.href'/etf-research/in-outflow?ticker=IWM'">IWM</button>
                 <button onclick="window.location.href'/etf-research/in-outflow?ticker=XLF'">XLF</button>
