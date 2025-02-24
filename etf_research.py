@@ -45,27 +45,37 @@ def etf_exposure():
         else:
             etf_info = etf_info_response.get("data", {})  # Get the dictionary under "data"
 
-    html = f"""
+    # Prepare context for Jinja2 templating
+    context = {
+        'ticker': ticker,
+        'error': error,
+        'data': data,
+        'etf_info': etf_info,
+        'etf_info_error': etf_info_error,
+        'MENU_BAR': MENU_BAR
+    }
+
+    html = """
     <h1>ETF-Research - Exposure</h1>
-    {MENU_BAR}
+    {{ MENU_BAR }}
     <div style="display: flex; flex-wrap: wrap;">
         <div style="flex: 1; min-width: 300px; margin-bottom: 20px;">
-            <h2>ETF Info for {ticker}</h2>
-            {f'<p style="color: red;">Error fetching ETF Info: {etf_info_error}</p>\n' if etf_info_error else ''}
-            <table border='1' {f'style="display: none;"' if not etf_info else ''} id="etfInfoTable">
+            <h2>ETF Info for {{ ticker }}</h2>
+            {% if etf_info_error %}<p style="color: red;">Error fetching ETF Info: {{ etf_info_error }}</p>{% endif %}
+            <table border='1' {% if not etf_info %}style="display: none;"{% endif %} id="etfInfoTable">
                 <tr><th>Field</th><th>Value</th></tr>
     """
-    if etf_info:  # Check if etf_info is not None or empty
+    if etf_info:
         for key, value in etf_info.items():
             if value is not None:  # Skip None values
-                html += f"<tr><td>{key.replace('_', ' ').title()}</td><td>{value}</td></tr>"
+                html += f"<tr><td>{key.replace('_', ' ').title()}</td><td>{{ {{ value }} }}</td></tr>"
     html += """
             </table>
         </div>
         <div style="flex: 2; min-width: 300px;">
             <form method="GET">
                 <label>Enter ETF Ticker (e.g., SPY, QQQ): </label>
-                <input type="text" name="ticker" value="{ticker}" placeholder="Enter ETF ticker symbol">
+                <input type="text" name="ticker" value="{{ ticker }}" placeholder="Enter ETF ticker symbol">
                 <button type="submit">Search</button>
             </form>
             <h3>Or Click a Predefined ETF:</h3>
@@ -75,8 +85,9 @@ def etf_exposure():
                 <button onclick="window.location.href='/etf-research/exposure?ticker=IWM'">IWM</button>
                 <button onclick="window.location.href='/etf-research/exposure?ticker=XLF'">XLF</button>
             </div>
-            {f'<p style="color: red;">Error: {error}</p>\n' if error else ''}{f'<p>No data available for ticker {ticker}</p>\n' if not error and not data else ''}
-            <table border='1' {f'style="display: none;"' if not data else ''} id="exposureTable">
+            {% if error %}<p style="color: red;">Error: {{ error }}</p>{% endif %}
+            {% if not error and not data %}<p>No data available for ticker {{ ticker }}</p>{% endif %}
+            <table border='1' {% if not data %}style="display: none;"{% endif %} id="exposureTable">
                 <tr>
                     <th>ETF</th>
                     <th>Full Name</th>
@@ -110,7 +121,7 @@ def etf_exposure():
         </div>
     </div>
     """
-    return render_template_string(html)
+    return render_template_string(html, **context)
 
 @etf_research_bp.route('/etf-research/holdings', methods=['GET'])
 def etf_holdings():
@@ -140,38 +151,49 @@ def etf_holdings():
         else:
             etf_info = etf_info_response.get("data", {})  # Get the dictionary under "data"
 
-    html = f"""
+    # Prepare context for Jinja2 templating
+    context = {
+        'ticker': ticker,
+        'error': error,
+        'data': data,
+        'etf_info': etf_info,
+        'etf_info_error': etf_info_error,
+        'MENU_BAR': MENU_BAR
+    }
+
+    html = """
     <h1>ETF-Research - Holdings</h1>
-    {MENU_BAR}
+    {{ MENU_BAR }}
     <div style="display: flex; flex-wrap: wrap;">
         <div style="flex: 1; min-width: 300px; margin-bottom: 20px;">
-            <h2>ETF Info for {ticker}</h2>
-            {f'<p style="color: red;">Error fetching ETF Info: {etf_info_error}</p>\n' if etf_info_error else ''}
-            <table border='1' {f'style="display: none;"' if not etf_info else ''} id="etfInfoTable">
+            <h2>ETF Info for {{ ticker }}</h2>
+            {% if etf_info_error %}<p style="color: red;">Error fetching ETF Info: {{ etf_info_error }}</p>{% endif %}
+            <table border='1' {% if not etf_info %}style="display: none;"{% endif %} id="etfInfoTable">
                 <tr><th>Field</th><th>Value</th></tr>
     """
     if etf_info:  # Check if etf_info is not None or empty
         for key, value in etf_info.items():
             if value is not None:  # Skip None values
-                html += f"<tr><td>{key.replace('_', ' ').title()}</td><td>{value}</td></tr>"
+                html += f"<tr><td>{key.replace('_', ' ').title()}</td><td>{{ {{ value }} }}</td></tr>"
     html += """
             </table>
         </div>
         <div style="flex: 2; min-width: 300px;">
             <form method="GET">
                 <label>Enter ETF Ticker (e.g., SPY, QQQ): </label>
-                <input type="text" name="ticker" value="{ticker}" placeholder="Enter ETF ticker symbol">
+                <input type="text" name="ticker" value="{{ ticker }}" placeholder="Enter ETF ticker symbol">
                 <button type="submit">Search</button>
             </form>
             <h3>Or Click a Predefined ETF:</h3>
             <div>
                 <button onclick="window.location.href='/etf-research/holdings?ticker=SPY'">SPY</button>
-                <button onclick="window.location.href='/etf-research/holdings?ticker=QQQ'">QQQ</button>
-                <button onclick="window.location.href='/etf-research/holdings?ticker=IWM'">IWM</button>
-                <button onclick="window.location.href='/etf-research/holdings?ticker=XLF'">XLF</button>
+                <button onclick="window.location.href'/etf-research/holdings?ticker=QQQ'">QQQ</button>
+                <button onclick="window.location.href'/etf-research/holdings?ticker=IWM'">IWM</button>
+                <button onclick="window.location.href'/etf-research/holdings?ticker=XLF'">XLF</button>
             </div>
-            {f'<p style="color: red;">Error: {error}</p>\n' if error else ''}{f'<p>No data available for ticker {ticker}</p>\n' if not error and not data else ''}
-            <table border='1' {f'style="display: none;"' if not data else ''} id="holdingsTable">
+            {% if error %}<p style="color: red;">Error: {{ error }}</p>{% endif %}
+            {% if not error and not data %}<p>No data available for ticker {{ ticker }}</p>{% endif %}
+            <table border='1' {% if not data %}style="display: none;"{% endif %} id="holdingsTable">
                 <tr>
                     <th>Ticker</th>
                     <th>Name</th>
@@ -215,7 +237,7 @@ def etf_holdings():
         </div>
     </div>
     """
-    return render_template_string(html)
+    return render_template_string(html, **context)
 
 @etf_research_bp.route('/etf-research/in-outflow', methods=['GET'])
 def etf_in_outflow():
@@ -249,27 +271,37 @@ def etf_in_outflow():
         else:
             etf_info = etf_info_response.get("data", {})  # Get the dictionary under "data"
 
-    html = f"""
+    # Prepare context for Jinja2 templating
+    context = {
+        'ticker': ticker,
+        'error': error,
+        'data': data,
+        'etf_info': etf_info,
+        'etf_info_error': etf_info_error,
+        'MENU_BAR': MENU_BAR
+    }
+
+    html = """
     <h1>ETF-Research - In-Out Flow</h1>
-    {MENU_BAR}
+    {{ MENU_BAR }}
     <div style="display: flex; flex-wrap: wrap;">
         <div style="flex: 1; min-width: 300px; margin-bottom: 20px;">
-            <h2>ETF Info for {ticker}</h2>
-            {f'<p style="color: red;">Error fetching ETF Info: {etf_info_error}</p>\n' if etf_info_error else ''}
-            <table border='1' {f'style="display: none;"' if not etf_info else ''} id="etfInfoTable">
+            <h2>ETF Info for {{ ticker }}</h2>
+            {% if etf_info_error %}<p style="color: red;">Error fetching ETF Info: {{ etf_info_error }}</p>{% endif %}
+            <table border='1' {% if not etf_info %}style="display: none;"{% endif %} id="etfInfoTable">
                 <tr><th>Field</th><th>Value</th></tr>
     """
     if etf_info:  # Check if etf_info is not None or empty
         for key, value in etf_info.items():
             if value is not None:  # Skip None values
-                html += f"<tr><td>{key.replace('_', ' ').title()}</td><td>{value}</td></tr>"
+                html += f"<tr><td>{key.replace('_', ' ').title()}</td><td>{{ {{ value }} }}</td></tr>"
     html += """
             </table>
         </div>
         <div style="flex: 2; min-width: 300px;">
             <form method="GET">
                 <label>Enter ETF Ticker (e.g., SPY, QQQ): </label>
-                <input type="text" name="ticker" value="{ticker}" placeholder="Enter ETF ticker symbol">
+                <input type="text" name="ticker" value="{{ ticker }}" placeholder="Enter ETF ticker symbol">
                 <button type="submit">Search</button>
             </form>
             <h3>Or Click a Predefined ETF:</h3>
@@ -279,8 +311,9 @@ def etf_in_outflow():
                 <button onclick="window.location.href'/etf-research/in-outflow?ticker=IWM'">IWM</button>
                 <button onclick="window.location.href'/etf-research/in-outflow?ticker=XLF'">XLF</button>
             </div>
-            {f'<p style="color: red;">Error: {error}</p>\n' if error else ''}{f'<p>No data available for ticker {ticker}</p>\n' if not error and not data else ''}
-            <table border='1' {f'style="display: none;"' if not data else ''} id="inOutflowTable">
+            {% if error %}<p style="color: red;">Error: {{ error }}</p>{% endif %}
+            {% if not error and not data %}<p>No data available for ticker {{ ticker }}</p>{% endif %}
+            <table border='1' {% if not data %}style="display: none;"{% endif %} id="inOutflowTable">
                 <tr>
                     <th>Date</th>
                     <th>Inflow</th>
@@ -320,4 +353,4 @@ def etf_in_outflow():
         </div>
     </div>
     """
-    return render_template_string(html)
+    return render_template_string(html, **context)
