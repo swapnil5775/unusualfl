@@ -25,28 +25,26 @@ def etf_exposure():
 
     if ticker:
         response = get_api_data(ETF_EXPOSURE_API_URL.format(ticker=ticker))
-        print(f"ETF Exposure API Response for {ticker}: {response}")  # Debug log
+        print(f"ETF Exposure API Response for {ticker}: {response}")
         if "error" in response:
             error = response["error"]
         else:
             data = response.get("data", [])
-            print(f"Data type for {ticker}: {type(data)}, Content: {data}")  # Extra debug
+            print(f"Data type for {ticker}: {type(data)}, Content: {data}")
             if not isinstance(data, list):
                 error = f"API returned unexpected format: expected list, got {type(data)}"
                 data = None
 
-    # Fetch ETF Info for the info bar
     etf_info = None
     etf_info_error = None
     if ticker:
         etf_info_response = get_api_data(ETF_INFO_API_URL.format(ticker=ticker))
-        print(f"ETF Info API Response for {ticker}: {etf_info_response}")  # Debug log
+        print(f"ETF Info API Response for {ticker}: {etf_info_response}")
         if "error" in etf_info_response:
             etf_info_error = etf_info_response["error"]
         else:
             etf_info = etf_info_response.get("data", {})
 
-    # Prepare context for Jinja2 templating
     context = {
         'ticker': ticker,
         'error': error,
@@ -207,10 +205,13 @@ def etf_holdings():
             shares = item.get('shares', 'N/A')
             weight = item.get('weight', 'N/A')
             market_value = item.get('market_value', 'N/A')
-            try:
-                weight = float(weight) if weight and weight != 'N/A' else 'N/A'
-            except (ValueError, TypeError):
-                weight = 'N/A'
+            # Preprocess weight to ensure it's either a formatted string or 'N/A'
+            weight_display = 'N/A'
+            if weight != 'N/A':
+                try:
+                    weight_display = f"{float(weight):.2f}%"
+                except (ValueError, TypeError):
+                    weight_display = 'N/A'
             try:
                 shares = str(shares) if shares and shares != 'N/A' else 'N/A'
             except (ValueError, TypeError):
@@ -220,7 +221,7 @@ def etf_holdings():
                 <td>{ticker_val}</td>
                 <td>{name}</td>
                 <td>{shares}</td>
-                <td>{weight:.2f if weight != 'N/A' else 'N/A'}%</td>
+                <td>{weight_display}</td>
                 <td>{market_value}</td>
             </tr>
             """
