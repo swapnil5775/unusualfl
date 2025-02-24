@@ -435,16 +435,16 @@ def seasonality_etf_market():
             error = f"Error fetching Yahoo Finance data for {ticker}: {str(e)}"
             logger.error(error)
 
-    # Fetch ETF Info for the info bar (optional, only if ticker is valid and not 'ALL')
-    etf_info = None
-    etf_info_error = None
-    if ticker != 'ALL':
-        etf_info_response = get_api_data(ETF_INFO_API_URL.format(ticker=ticker))
-        if "error" in etf_info_response:
-            etf_info_error = etf_info_response["error"]
-            logger.error(f"ETF Info API Error for {ticker}: {etf_info_error}")
-        else:
-            etf_info = etf_info_response.get("data", {})  # Get the dictionary under "data"
+    # Removed ETF Info fetching since it's no longer needed on this page
+    # etf_info = None
+    # etf_info_error = None
+    # if ticker != 'ALL':
+    #     etf_info_response = get_api_data(ETF_INFO_API_URL.format(ticker=ticker))
+    #     if "error" in etf_info_response:
+    #         etf_info_error = etf_info_response["error"]
+    #         logger.error(f"ETF Info API Error for {ticker}: {etf_info_error}")
+    #     else:
+    #         etf_info = etf_info_response.get("data", {})  # Get the dictionary under "data"
 
     # Serialize JSON data for JavaScript
     common_years = []
@@ -483,7 +483,7 @@ def seasonality_etf_market():
 
     etf_tickers = ['SPY', 'QQQ', 'IWM', 'XLE', 'XLC', 'XLK', 'XLV', 'XLP', 'XLY', 'XLRE', 'XLF', 'XLI', 'XLB']
 
-    # Prepare context for Jinja2 templating
+    # Prepare context for Jinja2 templating, removing etf_info and etf_info_error
     context = {
         'ticker': ticker,
         'data': data,
@@ -494,8 +494,6 @@ def seasonality_etf_market():
         'common_years': common_years,
         'performance_values_filtered': performance_values_filtered,
         'price_values_filtered': price_values_filtered,
-        'etf_info': etf_info,
-        'etf_info_error': etf_info_error,
         'etf_tickers': etf_tickers,
         'MENU_BAR': MENU_BAR
     }
@@ -503,24 +501,10 @@ def seasonality_etf_market():
     html = """
     <h1>Seasonality - ETF Market</h1>
     {{ MENU_BAR | safe }}
-    <div style="display: flex; flex-wrap: wrap;">
-        <div style="flex: 1; min-width: 300px; margin-bottom: 20px;">
-            <h2>ETF Info for {{ ticker if ticker != 'ALL' else '' }}</h2>
-            {% if etf_info_error %}<p style="color: red;">Error fetching ETF Info: {{ etf_info_error }}</p>{% endif %}
-            <table border='1' {% if not etf_info or ticker == 'ALL' %}style="display: none;"{% endif %} id="etfInfoTable">
-                <tr><th>Field</th><th>Value</th></tr>
-    """
-    if etf_info and ticker != 'ALL':
-        for key, value in etf_info.items():
-            if value is not None:  # Skip None values
-                html += f"<tr><td>{key.replace('_', ' ').title()}</td><td>{{ etf_info['{key}'] }}</td></tr>"
-    html += """
-            </table>
-        </div>
-        <div style="flex: 2; min-width: 300px;">
-            <h3>Select ETF or View All:</h3>
-            <div>
-                <button onclick="window.location.href='/seasonality/etf-market?ticker=ALL'">ALL</button>
+    <div style="min-width: 300px;">  <!-- Simplified to a single div for content -->
+        <h3>Select ETF or View All:</h3>
+        <div>
+            <button onclick="window.location.href='/seasonality/etf-market?ticker=ALL'">ALL</button>
     """
     # Fix button URLs to ensure proper navigation
     for t in etf_tickers:
@@ -528,22 +512,22 @@ def seasonality_etf_market():
             <button onclick="window.location.href='/seasonality/etf-market?ticker={t}'">{t}</button>
         """
     html += """
-            </div>
-            {% if error %}<p style="color: red;">Error: {{ error }}</p>{% endif %}
-            {% if not error and not data %}<p>No data available for ticker {{ ticker }}</p>{% endif %}
-            <table border='1' {% if not data %}style="display: none;"{% endif %} id="etfMarketTable">
-                <tr>
-                    <th><a href="#" onclick="sortTable('ticker')">Ticker</a></th>
-                    <th><a href="#" onclick="sortTable('month')">Month</a></th>
-                    <th><a href="#" onclick="sortTable('avg_change')">Avg Change</a></th>
-                    <th><a href="#" onclick="sortTable('max_change')">Max Change</a></th>
-                    <th><a href="#" onclick="sortTable('median_change')">Median Change</a></th>
-                    <th><a href="#" onclick="sortTable('min_change')">Min Change</a></th>
-                    <th><a href="#" onclick="sortTable('positive_closes')">Positive Closes</a></th>
-                    <th><a href="#" onclick="sortTable('positive_months_perc')">Positive Months %</a></th>
-                    <th><a href="#" onclick="sortTable('years')">Years</a></th>
-                    <th>Live Price</th>
-                </tr>
+        </div>
+        {% if error %}<p style="color: red;">Error: {{ error }}</p>{% endif %}
+        {% if not error and not data %}<p>No data available for ticker {{ ticker }}</p>{% endif %}
+        <table border='1' {% if not data %}style="display: none;"{% endif %} id="etfMarketTable">
+            <tr>
+                <th><a href="#" onclick="sortTable('ticker')">Ticker</a></th>
+                <th><a href="#" onclick="sortTable('month')">Month</a></th>
+                <th><a href="#" onclick="sortTable('avg_change')">Avg Change</a></th>
+                <th><a href="#" onclick="sortTable('max_change')">Max Change</a></th>
+                <th><a href="#" onclick="sortTable('median_change')">Median Change</a></th>
+                <th><a href="#" onclick="sortTable('min_change')">Min Change</a></th>
+                <th><a href="#" onclick="sortTable('positive_closes')">Positive Closes</a></th>
+                <th><a href="#" onclick="sortTable('positive_months_perc')">Positive Months %</a></th>
+                <th><a href="#" onclick="sortTable('years')">Years</a></th>
+                <th>Live Price</th>
+            </tr>
     """
     if data:
         for item in data:
@@ -578,7 +562,7 @@ def seasonality_etf_market():
             """
 
     html += """
-            </table>
+        </table>
     """
 
     if ticker != 'ALL':
@@ -707,7 +691,7 @@ def seasonality_etf_market():
                 yaxis: 'y1'
             };
             const combinedPerformanceTrace = {
-                x: commonYears,
+                x: common_years,
                 y: performanceValuesFiltered,
                 type: 'bar',
                 name: 'Yearly Return (%)',
