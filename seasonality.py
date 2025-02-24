@@ -1,15 +1,17 @@
 from flask import Blueprint, render_template_string, request, jsonify
-from common import get_api_data, get_live_stock_price, MENU_BAR, SEASONALITY_API_URL, SEASONALITY_MARKET_API_URL, ETF_INFO_API_URL
+from common import get_api_data, get_live_stock_price, MENU_BAR, SEASONALITY_API_URL, SEASONALITY_MARKET_API_URL, ETF_INFO_API_URL, OPENAI_API_KEY
 import logging
 import json
 import openai
+import yfinance as yf
+from datetime import datetime, timedelta
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Configure OpenAI API (replace 'your-api-key-here' with your actual OpenAI API key)
-openai.api_key = 'your-api-key-here'  # Replace with your OpenAI API key or set as an environment variable
+# Configure OpenAI API using the key from common.py
+openai.api_key = OPENAI_API_KEY
 
 seasonality_bp = Blueprint('seasonality', __name__, url_prefix='/')
 
@@ -486,6 +488,7 @@ def seasonality_etf_market():
             <div id="aiResponse" style="margin-top: 10px;"></div>
         </div>
     </div>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <script>
         let sortState = { col: 'ticker', dir: 'asc' };
 
@@ -534,47 +537,55 @@ def seasonality_etf_market():
             }
         }
     </script>
-    <script>
-        // Flask endpoint for OpenAI API call
-        @app.route('/api/ai-summary', methods=['POST'])
-        def ai_summary():
-            data = request.json
-            question = data.get('question', '')
-            csv_data = data.get('data', '')
-
-            prompt = f"""
-            Analyze the given ETF seasonality data and generate a structured response with 4 bullet points of unique insights based on the following prompt:
-
-            - Analyze the given ETF seasonality data and generate a structured table with the following columns:
-              1. Month (Display as full month name instead of a number)
-              2. ETF (The ETF ticker symbol)
-              3. Upside/Downside Change (The average price change for that ETF in that month)
-              4. Insight (A brief explanation of why the ETF should be watched in that month)
-              5. Win Probability (%) (Percentage of months in the last 15 years where the ETF closed positively)
-
-            Ensure the response provides actionable insights, helping users understand which ETFs to monitor for potential upside or downside movements based on historical trends.
-
-            Data:
-            {csv_data}
-
-            Question: {question}
-            """
-
-            try:
-                response = openai.ChatCompletion.create(
-                    model="gpt-3.5-turbo",  # You can use "gpt-4" if you have access
-                    messages=[
-                        {"role": "system", "content": "You are a financial data analyst specializing in ETF seasonality trends."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    max_tokens=300
-                )
-                summary = response.choices[0].message['content'].strip().split('\n')
-                summary = [line.strip('- ').strip() for line in summary if line.strip()]
-                return jsonify({"summary": summary[:4]})  # Limit to 4 bullet points
-            except Exception as e:
-                logger.error(f"OpenAI API error: {str(e)}")
-                return jsonify({"error": str(e)}), 500
-    </script>
     """
+
     return render_template_string(html, **context)
+
+# Define the Flask app instance (needed for the API route)
+app = Flask(__name__)
+
+# Register the Blueprint
+app.register_blueprint(seasonality_bp)
+
+@app.route('/api/ai-summary', methods=['POST'])
+def ai_summary():
+    data = request.json
+    question = data.get('question', '')
+    csv_data = data.get('data', '')
+
+    prompt = f"""
+    Analyze the given ETF seasonality data and generate a structured response with 4 bullet points of unique insights based on the following prompt:
+
+    - Analyze the given ETF seasonality data and generate a structured table with the following columns:
+      1. Month (Display as full month name instead of a number)
+      2. ETF (The ETF ticker symbol)
+      3. Upside/Downside Change (The average price change for that ETF in that month)
+      4. Insight (A brief explanation of why the ETF should be watched in that month)
+      5. Win Probability (%) (Percentage of months in the last 15 years where the ETF closed positively)
+
+    Ensure the response provides actionable insights, helping users understand which ETFs to monitor for potential upside or downside movements based on historical trends.
+
+    Data:
+    {csv_data}
+
+    Question: {question}
+    """
+
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",  # You can use "gpt-4" if you have access
+            messages=[
+                {"role": "system", "content": "You are a financial data analyst specializing in ETF seasonality trends."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=300
+        )
+        summary = response.choices[0].message['content'].strip().split('\n')
+        summary = [line.strip('- ').strip() for line in summary if line.strip()]
+        return jsonify({"summary": summary[:4]})  # Limit to 4 bullet points
+    except Exception as e:
+        logger.error(f"OpenAI API error: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+if __name__ == '__main__':
+    app.run(debug=True)
