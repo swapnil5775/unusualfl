@@ -6,6 +6,11 @@ import plotly.graph_objs as go
 from plotly.utils import PlotlyJSONEncoder
 import json
 import pandas as pd
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 seasonality_bp = Blueprint('seasonality', __name__, url_prefix='/')
 
@@ -395,7 +400,7 @@ def seasonality_etf_market():
     response = get_api_data(SEASONALITY_MARKET_API_URL)
     if "error" in response:
         error = response["error"]
-        print(f"API Error for {SEASONALITY_MARKET_API_URL}: {error}")
+        logger.error(f"API Error for {SEASONALITY_MARKET_API_URL}: {error}")
     else:
         all_data = response.get("data", [])
         data = [item for item in all_data if item['ticker'] == ticker] if ticker != 'ALL' else all_data
@@ -418,15 +423,17 @@ def seasonality_etf_market():
             hist = stock.history(period="5y", interval="1mo")
             # Yearly performance (% change) - use 'YE' instead of 'Y'
             yearly_performance = hist['Close'].resample('YE').last().pct_change().dropna() * 100
-            yearly_performance = yearly_performance.to_dict()
+            yearly_performance = yearly_performance.to_dict() if yearly_performance else {}
             years = [dt.strftime('%Y') for dt in yearly_performance.keys()] if yearly_performance else []
             performance_values = list(yearly_performance.values()) if yearly_performance else []
             # Yearly closing prices - use 'YE' instead of 'Y'
             yearly_prices = hist['Close'].resample('YE').last().dropna().to_dict()
             price_years = [dt.strftime('%Y') for dt in yearly_prices.keys()] if yearly_prices else []
             price_values = list(yearly_prices.values()) if yearly_prices else []
+            logger.info(f"Processed data for ticker {ticker}: years={years}, price_years={price_years}")
         except Exception as e:
-            error = f"Error fetching Yahoo Finance data: {str(e)}"
+            error = f"Error fetching Yahoo Finance data for {ticker}: {str(e)}"
+            logger.error(error)
 
     # Fetch ETF Info for the info bar (optional, only if ticker is valid and not 'ALL')
     etf_info = None
@@ -435,6 +442,7 @@ def seasonality_etf_market():
         etf_info_response = get_api_data(ETF_INFO_API_URL.format(ticker=ticker))
         if "error" in etf_info_response:
             etf_info_error = etf_info_response["error"]
+            logger.error(f"ETF Info API Error for {ticker}: {etf_info_error}")
         else:
             etf_info = etf_info_response.get("data", {})  # Get the dictionary under "data"
 
@@ -459,6 +467,7 @@ def seasonality_etf_market():
             common_years = []
             performance_values_filtered = []
             price_values_filtered = []
+            logger.warning(f"No yearly data available for ticker {ticker}")
 
     price_data_json = None
     if price_data is not None and not price_data.empty:
@@ -469,6 +478,8 @@ def seasonality_etf_market():
         price_data_json = json.dumps(price_data_dict)
     else:
         price_data_json = None
+        if ticker != 'ALL':
+            logger.warning(f"No price data available for ticker {ticker}")
 
     etf_tickers = ['SPY', 'QQQ', 'IWM', 'XLE', 'XLC', 'XLK', 'XLV', 'XLP', 'XLY', 'XLRE', 'XLF', 'XLI', 'XLB']
 
