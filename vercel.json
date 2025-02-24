@@ -42,10 +42,5 @@
   ],
   "env": {
     "PORT": "5000"
-  },
-  "excludeFiles": [
-    "__pycache__/**",
-    "*.log",
-    "*.txt"
-  ]
+  }
 }
