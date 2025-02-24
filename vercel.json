@@ -2,14 +2,34 @@
   "version": 2,
   "builds": [
     {
-      "src": "app.py",
+      "src": "seasonality.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "seasonality_etf.py",
       "use": "@vercel/python"
     }
   ],
   "routes": [
     {
+      "src": "/seasonality",
+      "dest": "seasonality.py"
+    },
+    {
+      "src": "/seasonality/per-ticker",
+      "dest": "seasonality.py"
+    },
+    {
+      "src": "/seasonality/etf-market",
+      "dest": "seasonality_etf.py"
+    },
+    {
+      "src": "/api/ai-summary",
+      "dest": "seasonality_etf.py"
+    },
+    {
       "src": "/(.*)",
-      "dest": "app.py"
+      "dest": "seasonality.py"
     }
   ],
   "env": {
