@@ -15,6 +15,9 @@ ETF_HOLDINGS_API_URL = "https://api.unusualwhales.com/api/etfs/{ticker}/holdings
 ETF_INOUTFLOW_API_URL = "https://api.unusualwhales.com/api/etfs/{ticker}/in-outflow"
 ETF_INFO_API_URL = "https://api.unusualwhales.com/api/etfs/{ticker}/info"
 
+# OpenAI API Key (securely retrieved from environment variable)
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
+
 def get_api_data(url, params=None):
     headers = {"Authorization": f"Bearer {APIKEY}"}
     try:
