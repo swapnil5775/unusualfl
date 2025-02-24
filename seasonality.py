@@ -1,10 +1,15 @@
-from flask import Blueprint, render_template_string, request
+from flask import Blueprint, render_template_string, request, jsonify
 from common import get_api_data, get_live_stock_price, MENU_BAR, SEASONALITY_API_URL, SEASONALITY_MARKET_API_URL, ETF_INFO_API_URL
 import logging
+import json
+import openai
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Configure OpenAI API (replace 'your-api-key-here' with your actual OpenAI API key)
+openai.api_key = 'your-api-key-here'  # Replace with your OpenAI API key or set as an environment variable
 
 seasonality_bp = Blueprint('seasonality', __name__, url_prefix='/')
 
@@ -410,32 +415,33 @@ def seasonality_etf_market():
     html = """
     <h1>Seasonality - ETF Market</h1>
     {{ MENU_BAR | safe }}
-    <div style="min-width: 300px;">
-        <h3>Select ETF or View All:</h3>
-        <div>
-            <button onclick="window.location.href='/seasonality/etf-market?ticker=ALL'">ALL</button>
+    <div style="display: flex; flex-wrap: wrap;">
+        <div style="flex: 2; min-width: 300px; margin-right: 20px;">
+            <h3>Select ETF or View All:</h3>
+            <div>
+                <button onclick="window.location.href='/seasonality/etf-market?ticker=ALL'">ALL</button>
     """
     for t in etf_tickers:
         html += f"""
             <button onclick="window.location.href='/seasonality/etf-market?ticker={t}'">{t}</button>
         """
     html += """
-        </div>
-        {% if error %}<p style="color: red;">Error: {{ error }}</p>{% endif %}
-        {% if not error and not data %}<p>No data available for ticker {{ ticker }}</p>{% endif %}
-        <table border='1' {% if not data %}style="display: none;"{% endif %} id="etfMarketTable">
-            <tr>
-                <th><a href="#" onclick="sortTable('ticker')">Ticker</a></th>
-                <th><a href="#" onclick="sortTable('month')">Month</a></th>
-                <th><a href="#" onclick="sortTable('avg_change')">Avg Change</a></th>
-                <th><a href="#" onclick="sortTable('max_change')">Max Change</a></th>
-                <th><a href="#" onclick="sortTable('median_change')">Median Change</a></th>
-                <th><a href="#" onclick="sortTable('min_change')">Min Change</a></th>
-                <th><a href="#" onclick="sortTable('positive_closes')">Positive Closes</a></th>
-                <th><a href="#" onclick="sortTable('positive_months_perc')">Positive Months %</a></th>
-                <th><a href="#" onclick="sortTable('years')">Years</a></th>
-                <th>Live Price</th>
-            </tr>
+            </div>
+            {% if error %}<p style="color: red;">Error: {{ error }}</p>{% endif %}
+            {% if not error and not data %}<p>No data available for ticker {{ ticker }}</p>{% endif %}
+            <table border='1' {% if not data %}style="display: none;"{% endif %} id="etfMarketTable">
+                <tr>
+                    <th><a href="#" onclick="sortTable('ticker')">Ticker</a></th>
+                    <th><a href="#" onclick="sortTable('month')">Month</a></th>
+                    <th><a href="#" onclick="sortTable('avg_change')">Avg Change</a></th>
+                    <th><a href="#" onclick="sortTable('max_change')">Max Change</a></th>
+                    <th><a href="#" onclick="sortTable('median_change')">Median Change</a></th>
+                    <th><a href="#" onclick="sortTable('min_change')">Min Change</a></th>
+                    <th><a href="#" onclick="sortTable('positive_closes')">Positive Closes</a></th>
+                    <th><a href="#" onclick="sortTable('positive_months_perc')">Positive Months %</a></th>
+                    <th><a href="#" onclick="sortTable('years')">Years</a></th>
+                    <th>Live Price</th>
+                </tr>
     """
     if data:
         for item in data:
@@ -470,7 +476,15 @@ def seasonality_etf_market():
             """
 
     html += """
-        </table>
+            </table>
+        </div>
+        <div style="flex: 1; min-width: 300px; padding: 20px; border: 1px solid #ccc; border-radius: 5px; background-color: #f9f9f9;">
+            <h3>AI Summary</h3>
+            <textarea id="aiQuestion" rows="4" cols="50" placeholder="Enter your question about the ETF seasonality data..."></textarea>
+            <br>
+            <button onclick="getAiSummary()">Run AI Summary</button>
+            <div id="aiResponse" style="margin-top: 10px;"></div>
+        </div>
     </div>
     <script>
         let sortState = { col: 'ticker', dir: 'asc' };
@@ -488,6 +502,79 @@ def seasonality_etf_market():
             sortState.col = sortCol;
             sortState.dir = sortDir;
         }
+
+        async function getAiSummary() {
+            const question = document.getElementById('aiQuestion').value;
+            if (!question) {
+                alert('Please enter a question.');
+                return;
+            }
+
+            const data = {{ data | tojson | safe }};
+            if (!data || data.length === 0) {
+                document.getElementById('aiResponse').innerHTML = '<p>No data available for analysis.</p>';
+                return;
+            }
+
+            // Convert data to CSV-like format for OpenAI
+            const csvData = data.map(item => `
+                Month: ${item.month}, ETF: ${item.ticker}, Avg Change: ${item.avg_change}, 
+                Positive Months %: ${item.positive_months_perc * 100}`).join('\n');
+
+            try {
+                const response = await fetch('/api/ai-summary', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question: question, data: csvData })
+                });
+                const result = await response.json();
+                document.getElementById('aiResponse').innerHTML = '<ul>' + result.summary.map(point => `<li>${point}</li>`).join('') + '</ul>';
+            } catch (error) {
+                document.getElementById('aiResponse').innerHTML = `<p>Error: ${error.message}</p>`;
+            }
+        }
+    </script>
+    <script>
+        // Flask endpoint for OpenAI API call
+        @app.route('/api/ai-summary', methods=['POST'])
+        def ai_summary():
+            data = request.json
+            question = data.get('question', '')
+            csv_data = data.get('data', '')
+
+            prompt = f"""
+            Analyze the given ETF seasonality data and generate a structured response with 4 bullet points of unique insights based on the following prompt:
+
+            - Analyze the given ETF seasonality data and generate a structured table with the following columns:
+              1. Month (Display as full month name instead of a number)
+              2. ETF (The ETF ticker symbol)
+              3. Upside/Downside Change (The average price change for that ETF in that month)
+              4. Insight (A brief explanation of why the ETF should be watched in that month)
+              5. Win Probability (%) (Percentage of months in the last 15 years where the ETF closed positively)
+
+            Ensure the response provides actionable insights, helping users understand which ETFs to monitor for potential upside or downside movements based on historical trends.
+
+            Data:
+            {csv_data}
+
+            Question: {question}
+            """
+
+            try:
+                response = openai.ChatCompletion.create(
+                    model="gpt-3.5-turbo",  # You can use "gpt-4" if you have access
+                    messages=[
+                        {"role": "system", "content": "You are a financial data analyst specializing in ETF seasonality trends."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    max_tokens=300
+                )
+                summary = response.choices[0].message['content'].strip().split('\n')
+                summary = [line.strip('- ').strip() for line in summary if line.strip()]
+                return jsonify({"summary": summary[:4]})  # Limit to 4 bullet points
+            except Exception as e:
+                logger.error(f"OpenAI API error: {str(e)}")
+                return jsonify({"error": str(e)}), 500
     </script>
     """
     return render_template_string(html, **context)
