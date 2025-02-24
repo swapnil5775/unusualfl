@@ -25,13 +25,14 @@ def etf_exposure():
 
     if ticker:
         response = get_api_data(ETF_EXPOSURE_API_URL.format(ticker=ticker))
-        print(f"ETF Exposure API Response for {ticker}: {response}")  # Log the full response for debugging
+        print(f"ETF Exposure API Response for {ticker}: {response}")  # Debug log
         if "error" in response:
             error = response["error"]
         else:
             data = response.get("data", [])
-            if not isinstance(data, list):  # Ensure data is a list
-                error = f"Unexpected API response format: data is not a list, got {type(data)}"
+            print(f"Data type for {ticker}: {type(data)}, Content: {data}")  # Extra debug
+            if not isinstance(data, list):
+                error = f"API returned unexpected format: expected list, got {type(data)}"
                 data = None
 
     # Fetch ETF Info for the info bar
@@ -39,11 +40,11 @@ def etf_exposure():
     etf_info_error = None
     if ticker:
         etf_info_response = get_api_data(ETF_INFO_API_URL.format(ticker=ticker))
-        print(f"ETF Info API Response for {ticker}: {etf_info_response}")  # Log the full response
+        print(f"ETF Info API Response for {ticker}: {etf_info_response}")  # Debug log
         if "error" in etf_info_response:
             etf_info_error = etf_info_response["error"]
         else:
-            etf_info = etf_info_response.get("data", {})  # Get the dictionary under "data"
+            etf_info = etf_info_response.get("data", {})
 
     # Prepare context for Jinja2 templating
     context = {
@@ -67,8 +68,8 @@ def etf_exposure():
     """
     if etf_info:
         for key, value in etf_info.items():
-            if value is not None:  # Skip None values
-                html += f"<tr><td>{key.replace('_', ' ').title()}</td><td>{{ etf_info['{key}'] }}</td></tr>"
+            if value is not None:
+                html += f"<tr><td>{key.replace('_', ' ').title()}</td><td>{{{{ etf_info['{key}'] }}}}</td></tr>"
     html += """
             </table>
         </div>
@@ -82,8 +83,8 @@ def etf_exposure():
             <div>
                 <button onclick="window.location.href='/etf-research/exposure?ticker=SPY'">SPY</button>
                 <button onclick="window.location.href='/etf-research/exposure?ticker=QQQ'">QQQ</button>
-                <button onclick="window.location.href'/etf-research/exposure?ticker=IWM'">IWM</button>
-                <button onclick="window.location.href'/etf-research/exposure?ticker=XLF'">XLF</button>
+                <button onclick="window.location.href='/etf-research/exposure?ticker=IWM'">IWM</button>
+                <button onclick="window.location.href='/etf-research/exposure?ticker=XLF'">XLF</button>
             </div>
             {% if error %}<p style="color: red;">Error: {{ error }}</p>{% endif %}
             {% if not error and not data %}<p>No data available for ticker {{ ticker }}</p>{% endif %}
@@ -99,7 +100,6 @@ def etf_exposure():
     """
     if data:
         for item in data:
-            # Add fallback values for missing keys to prevent KeyError
             etf = item.get('etf', 'N/A')
             full_name = item.get('full_name', 'N/A')
             last_price = item.get('last_price', 'N/A')
@@ -131,27 +131,25 @@ def etf_holdings():
 
     if ticker:
         response = get_api_data(ETF_HOLDINGS_API_URL.format(ticker=ticker))
-        print(f"ETF Holdings API Response for {ticker}: {response}")  # Log the full response for debugging
+        print(f"ETF Holdings API Response for {ticker}: {response}")
         if "error" in response:
             error = response["error"]
         else:
             data = response.get("data", [])
-            if not isinstance(data, list):  # Ensure data is a list
+            if not isinstance(data, list):
                 error = f"Unexpected API response format: data is not a list, got {type(data)}"
                 data = None
 
-    # Fetch ETF Info for the info bar
     etf_info = None
     etf_info_error = None
     if ticker:
         etf_info_response = get_api_data(ETF_INFO_API_URL.format(ticker=ticker))
-        print(f"ETF Info API Response for {ticker}: {etf_info_response}")  # Log the full response
+        print(f"ETF Info API Response for {ticker}: {etf_info_response}")
         if "error" in etf_info_response:
             etf_info_error = etf_info_response["error"]
         else:
-            etf_info = etf_info_response.get("data", {})  # Get the dictionary under "data"
+            etf_info = etf_info_response.get("data", {})
 
-    # Prepare context for Jinja2 templating
     context = {
         'ticker': ticker,
         'error': error,
@@ -171,10 +169,10 @@ def etf_holdings():
             <table border='1' {% if not etf_info %}style="display: none;"{% endif %} id="etfInfoTable">
                 <tr><th>Field</th><th>Value</th></tr>
     """
-    if etf_info:  # Check if etf_info is not None or empty
+    if etf_info:
         for key, value in etf_info.items():
-            if value is not None:  # Skip None values
-                html += f"<tr><td>{key.replace('_', ' ').title()}</td><td>{{ etf_info['{key}'] }}</td></tr>"
+            if value is not None:
+                html += f"<tr><td>{key.replace('_', ' ').title()}</td><td>{{{{ etf_info['{key}'] }}}}</td></tr>"
     html += """
             </table>
         </div>
@@ -204,31 +202,25 @@ def etf_holdings():
     """
     if data:
         for item in data:
-            # Use .get() with fallback values for missing or None fields
             ticker_val = item.get('ticker', 'N/A')
             name = item.get('name', 'N/A')
             shares = item.get('shares', 'N/A')
             weight = item.get('weight', 'N/A')
             market_value = item.get('market_value', 'N/A')
-
-            # Safely convert weight to float if it's a string or number, or keep as 'N/A'
             try:
                 weight = float(weight) if weight and weight != 'N/A' else 'N/A'
             except (ValueError, TypeError):
                 weight = 'N/A'
-
-            # Safely convert shares to a string if it's a number, or keep as 'N/A'
             try:
                 shares = str(shares) if shares and shares != 'N/A' else 'N/A'
             except (ValueError, TypeError):
                 shares = 'N/A'
-
             html += f"""
             <tr>
                 <td>{ticker_val}</td>
                 <td>{name}</td>
                 <td>{shares}</td>
-                <td>{weight:.2f}%</td>  <!-- Format weight as percentage if it's a number -->
+                <td>{weight:.2f if weight != 'N/A' else 'N/A'}%</td>
                 <td>{market_value}</td>
             </tr>
             """
@@ -247,31 +239,28 @@ def etf_in_outflow():
 
     if ticker:
         response = get_api_data(ETF_INOUTFLOW_API_URL.format(ticker=ticker))
-        print(f"ETF In-Out Flow API Response for {ticker}: {response}")  # Log the full response for debugging
+        print(f"ETF In-Out Flow API Response for {ticker}: {response}")
         if "error" in response:
             error = response["error"]
         else:
             data = response.get("data", [])
-            if not isinstance(data, list):  # Ensure data is a list
+            if not isinstance(data, list):
                 error = f"Unexpected API response format: data is not a list, got {type(data)}"
                 data = None
             else:
-                # Debug: Print the structure of the first item to understand the keys
                 if data:
-                    print(f"First data item structure: {data[0]}")
+                    print(f"First data item structure for {ticker}: {data[0]}")
 
-    # Fetch ETF Info for the info bar
     etf_info = None
     etf_info_error = None
     if ticker:
         etf_info_response = get_api_data(ETF_INFO_API_URL.format(ticker=ticker))
-        print(f"ETF Info API Response for {ticker}: {etf_info_response}")  # Log the full response
+        print(f"ETF Info API Response for {ticker}: {etf_info_response}")
         if "error" in etf_info_response:
             etf_info_error = etf_info_response["error"]
         else:
-            etf_info = etf_info_response.get("data", {})  # Get the dictionary under "data"
+            etf_info = etf_info_response.get("data", {})
 
-    # Prepare context for Jinja2 templating
     context = {
         'ticker': ticker,
         'error': error,
@@ -291,10 +280,10 @@ def etf_in_outflow():
             <table border='1' {% if not etf_info %}style="display: none;"{% endif %} id="etfInfoTable">
                 <tr><th>Field</th><th>Value</th></tr>
     """
-    if etf_info:  # Check if etf_info is not None or empty
+    if etf_info:
         for key, value in etf_info.items():
-            if value is not None:  # Skip None values
-                html += f"<tr><td>{key.replace('_', ' ').title()}</td><td>{{ etf_info['{key}'] }}</td></tr>"
+            if value is not None:
+                html += f"<tr><td>{key.replace('_', ' ').title()}</td><td>{{{{ etf_info['{key}'] }}}}</td></tr>"
     html += """
             </table>
         </div>
@@ -306,10 +295,10 @@ def etf_in_outflow():
             </form>
             <h3>Or Click a Predefined ETF:</h3>
             <div>
-                <button onclick="window.location.href'/etf-research/in-outflow?ticker=SPY'">SPY</button>
-                <button onclick="window.location.href'/etf-research/in-outflow?ticker=QQQ'">QQQ</button>
-                <button onclick="window.location.href'/etf-research/in-outflow?ticker=IWM'">IWM</button>
-                <button onclick="window.location.href'/etf-research/in-outflow?ticker=XLF'">XLF</button>
+                <button onclick="window.location.href='/etf-research/in-outflow?ticker=SPY'">SPY</button>
+                <button onclick="window.location.href='/etf-research/in-outflow?ticker=QQQ'">QQQ</button>
+                <button onclick="window.location.href='/etf-research/in-outflow?ticker=IWM'">IWM</button>
+                <button onclick="window.location.href='/etf-research/in-outflow?ticker=XLF'">XLF</button>
             </div>
             {% if error %}<p style="color: red;">Error: {{ error }}</p>{% endif %}
             {% if not error and not data %}<p>No data available for ticker {{ ticker }}</p>{% endif %}
@@ -323,23 +312,19 @@ def etf_in_outflow():
     """
     if data:
         for item in data:
-            # Use .get() with fallback values for missing or None fields to prevent KeyError
             date = item.get('date', 'N/A')
-            inflow = item.get('inflow', 'N/A')  # Fallback to 'N/A' if 'inflow' is missing
-            outflow = item.get('outflow', 'N/A')  # Fallback to 'N/A' if 'outflow' is missing
-            net_flow = item.get('net_flow', 'N/A')  # Fallback to 'N/A' if 'net_flow' is missing
-
-            # Attempt to format numeric values if they exist and are not 'N/A'
+            inflow = item.get('inflow', 'N/A')
+            outflow = item.get('outflow', 'N/A')
+            net_flow = item.get('net_flow', 'N/A')
             try:
                 if inflow != 'N/A':
-                    inflow = f"{float(inflow):,.2f}"  # Format as number with commas and 2 decimals
+                    inflow = f"{float(inflow):,.2f}"
                 if outflow != 'N/A':
                     outflow = f"{float(outflow):,.2f}"
                 if net_flow != 'N/A':
                     net_flow = f"{float(net_flow):,.2f}"
             except (ValueError, TypeError):
-                pass  # Keep as 'N/A' if conversion fails
-
+                pass
             html += f"""
             <tr>
                 <td>{date}</td>
