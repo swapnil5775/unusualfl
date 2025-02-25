@@ -1,9 +1,10 @@
+import json
 from flask import Blueprint, render_template_string
 from common import get_api_data, get_live_stock_price, MENU_BAR, INST_LIST_API_URL, INST_HOLDINGS_API_URL
 
-research_bp = Blueprint('research', __name__, url_prefix='/')
+research_bp = Blueprint('research', __name__, url_prefix='/research')
 
-@research_bp.route('/research')
+@research_bp.route('/')
 def research():
     inst_data = get_api_data(INST_LIST_API_URL)
     if "error" in inst_data:
@@ -53,7 +54,6 @@ def research():
         table_html += "</tr>"
         ticker_options += f"<option value='{ticker}'>{ticker}</option>"
 
-    # Pie Chart HTML for Holdings
     pie_chart_html = f"""
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <select id="institutionSelect" onchange="updatePieChart()">
@@ -75,7 +75,12 @@ def research():
             const institution = document.getElementById('institutionSelect').value;
             if (!institution) return;
 
-            const holdings = holdingsDataMaster[institution] || {};
+            const holdings = {};
+            for (let ticker in holdingsDataMaster) {
+                if (holdingsDataMaster[ticker][institution]) {
+                    holdings[ticker] = holdingsDataMaster[ticker][institution];
+                }
+            }
             const labels = Object.keys(holdings);
             const data = Object.values(holdings);
 
@@ -119,7 +124,7 @@ def research():
 
     html = f"""
     <h1>Research</h1>
-    {{ MENU_BAR | safe }}
+    {MENU_BAR}
     <h2>All Institution Holdings</h2>
     {table_html}
     <h2>Top 10 Holdings by Institution</h2>
