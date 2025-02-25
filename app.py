@@ -1,3 +1,4 @@
+import os
 from flask import Flask
 from institution_list import institution_bp
 from research import research_bp
