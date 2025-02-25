@@ -6,11 +6,9 @@ import openai
 import yfinance as yf
 from datetime import datetime, timedelta
 
-# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Configure OpenAI API
 openai.api_key = OPENAI_API_KEY
 
 seasonality_bp = Blueprint('seasonality', __name__, url_prefix='/seasonality')
