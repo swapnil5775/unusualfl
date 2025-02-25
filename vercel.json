@@ -8,34 +8,6 @@
   ],
   "routes": [
     {
-      "src": "/seasonality",
-      "dest": "app.py"
-    },
-    {
-      "src": "/seasonality/per-ticker",
-      "dest": "app.py"
-    },
-    {
-      "src": "/seasonality/etf-market",
-      "dest": "app.py"
-    },
-    {
-      "src": "/api/ai-summary",
-      "dest": "app.py"
-    },
-    {
-      "src": "/etf-research",
-      "dest": "app.py"
-    },
-    {
-      "src": "/institution/list",
-      "dest": "app.py"
-    },
-    {
-      "src": "/research",
-      "dest": "app.py"
-    },
-    {
       "src": "/(.*)",
       "dest": "app.py"
     }
