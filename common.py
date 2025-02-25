@@ -4,7 +4,6 @@ import requests
 import json
 import yfinance as yf
 
-# API configuration
 APIKEY = os.environ.get('UNUSUALWHALES_API_KEY', 'bd0cf36c-5072-4b1e-87ee-7e278b8a02e5')
 INST_LIST_API_URL = "https://api.unusualwhales.com/api/institutions"
 INST_HOLDINGS_API_URL = "https://api.unusualwhales.com/api/institution/{name}/holdings"
@@ -15,7 +14,6 @@ ETF_HOLDINGS_API_URL = "https://api.unusualwhales.com/api/etfs/{ticker}/holdings
 ETF_INOUTFLOW_API_URL = "https://api.unusualwhales.com/api/etfs/{ticker}/in-outflow"
 ETF_INFO_API_URL = "https://api.unusualwhales.com/api/etfs/{ticker}/info"
 
-# OpenAI API Key
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 
 def get_api_data(url, params=None):
