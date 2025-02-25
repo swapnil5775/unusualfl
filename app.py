@@ -7,7 +7,6 @@ from etf_research import etf_research_bp
 
 app = Flask(__name__)
 
-# Register blueprints
 app.register_blueprint(institution_bp)
 app.register_blueprint(research_bp)
 app.register_blueprint(seasonality_bp)
