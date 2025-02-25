@@ -1,9 +1,9 @@
 from flask import Blueprint, render_template_string, request
 from common import get_api_data, get_live_stock_price, MENU_BAR, ETF_EXPOSURE_API_URL, ETF_HOLDINGS_API_URL, ETF_INOUTFLOW_API_URL, ETF_INFO_API_URL
 
-etf_research_bp = Blueprint('etf_research', __name__, url_prefix='/')
+etf_research_bp = Blueprint('etf_research', __name__, url_prefix='/etf-research')
 
-@etf_research_bp.route('/etf-research')
+@etf_research_bp.route('/')
 def etf_research():
     html = f"""
     <h1>ETF-Research</h1>
@@ -17,7 +17,7 @@ def etf_research():
     """
     return render_template_string(html)
 
-@etf_research_bp.route('/etf-research/exposure', methods=['GET'])
+@etf_research_bp.route('/exposure', methods=['GET'])
 def etf_exposure():
     ticker = request.args.get('ticker', '').upper()
     data = None
@@ -121,7 +121,7 @@ def etf_exposure():
     """
     return render_template_string(html, **context)
 
-@etf_research_bp.route('/etf-research/holdings', methods=['GET'])
+@etf_research_bp.route('/holdings', methods=['GET'])
 def etf_holdings():
     ticker = request.args.get('ticker', '').upper()
     data = None
@@ -205,7 +205,6 @@ def etf_holdings():
             shares = item.get('shares', 'N/A')
             weight = item.get('weight', 'N/A')
             market_value = item.get('market_value', 'N/A')
-            # Preprocess weight to ensure it's either a formatted string or 'N/A'
             weight_display = 'N/A'
             if weight != 'N/A':
                 try:
@@ -232,7 +231,7 @@ def etf_holdings():
     """
     return render_template_string(html, **context)
 
-@etf_research_bp.route('/etf-research/in-outflow', methods=['GET'])
+@etf_research_bp.route('/in-outflow', methods=['GET'])
 def etf_in_outflow():
     ticker = request.args.get('ticker', '').upper()
     data = None
