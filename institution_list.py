@@ -1,7 +1,7 @@
-from flask import Blueprint, render_template_string
+from flask import Blueprint, render_template_string, request, jsonify
 from common import get_api_data, get_live_stock_price, MENU_BAR, INST_LIST_API_URL, INST_HOLDINGS_API_URL
 
-institution_bp = Blueprint('institution', __name__, url_prefix='/')
+institution_bp = Blueprint('institution', __name__, url_prefix='/institution')
 
 @institution_bp.route('/')
 def home():
@@ -12,7 +12,7 @@ def home():
     """
     return render_template_string(html)
 
-@institution_bp.route('/institution/list')
+@institution_bp.route('/list')
 def institution_list():
     data = get_api_data(INST_LIST_API_URL)
     html = f"""
@@ -58,8 +58,7 @@ def institution_list():
                         data.data.forEach(holding => {
                             table += '<tr><td>' + (holding.ticker || 'N/A') + '</td><td>' + 
                                     (holding.units || 'N/A') + '</td><td>' + 
-                                    (holding.value || 'N/A') + '</td><td>' + 
-                                    (get_live_stock_price(holding.ticker) || 'N/A') + '</td></tr>';
+                                    (holding.value || 'N/A') + '</td><td>N/A</td></tr>';
                         });
                     }
                     document.getElementById('holdingsTable').innerHTML = table;
@@ -131,9 +130,8 @@ def institution_list():
     """
     return render_template_string(html)
 
-@institution_bp.route('/institution/holdings')
+@institution_bp.route('/holdings')
 def get_institution_holdings():
-    from common import INST_HOLDINGS_API_URL, get_api_data
     name = request.args.get('name')
     data = get_api_data(INST_HOLDINGS_API_URL.format(name=name))
     return jsonify(data)
