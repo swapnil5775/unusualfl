@@ -1,9 +1,15 @@
 name: Deploy to Heroku
 
+# This workflow requires three secrets to be set up in your GitHub repository:
+# 1. HEROKU_API_KEY: Your Heroku API key
+# 2. HEROKU_APP_NAME: The name of your Heroku app
+# 3. HEROKU_EMAIL: The email associated with your Heroku account
+
 on:
   push:
     branches:
       - main
+      - heroku-deployment  # Added to deploy from this branch too
 
 jobs:
   build:
