@@ -65,6 +65,14 @@ The application is configured for automatic deployment to Render:
 2. GitHub Actions will automatically trigger a deployment to Render
 3. Monitor the deployment status in the GitHub Actions tab
 
+### Deployment Status
+
+The application is currently deployed and running on Render. The deployment is managed through GitHub Actions, which automatically deploys changes when pushed to the main branch.
+
+Current deployment URL: [FinanceHub on Render](https://financehub.onrender.com) (Replace with your actual Render URL)
+
+Last deployed: March 21, 2024
+
 ### Setting Up Automated Deployment
 
 To set up automated deployment to Render:
