@@ -8,10 +8,12 @@ from datetime import datetime, timedelta
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-research_bp = Blueprint('research', __name__, url_prefix='/')
 
-@research_bp.route('/research')
+research_bp = Blueprint('research', __name__, url_prefix='/research')
+
+@research_bp.route('/')
 def research():
+
     ticker = request.args.get('ticker', '').upper()
     stock_data = None
     error = None
@@ -149,6 +151,68 @@ def research():
             </div>
         </div>
         {% endif %}
+
+    inst_data = get_api_data(INST_LIST_API_URL)
+    if "error" in inst_data:
+        html = f"""
+        <h1>Research</h1>
+        {MENU_BAR}
+        <p>Error fetching institution list: {inst_data['error']}</p>
+        """
+        return render_template_string(html)
+
+    institutions = inst_data.get("data", [])
+    holdings_master = {}
+    inst_totals = {}
+
+    for inst in institutions:
+        name = inst if isinstance(inst, str) else inst.get('name', 'N/A')
+        holdings_data = get_api_data(INST_HOLDINGS_API_URL.format(name=name))
+        if "error" not in holdings_data:
+            holdings = holdings_data.get("data", [])
+            total_units = 0
+            for holding in holdings:
+                ticker = holding.get("ticker")
+                units = float(holding.get("units", 0) or 0)
+                total_units += units
+                if ticker:
+                    if ticker not in holdings_master:
+                        holdings_master[ticker] = {}
+                    holdings_master[ticker][name] = units
+            inst_totals[name] = total_units
+
+    inst_names = sorted(inst_totals.keys(), key=lambda x: inst_totals[x], reverse=True)[:10]
+
+    table_html = "<table border='1' id='masterTable'><tr><th>Ticker</th><th>Total Units</th><th>Live Stock Price</th>"
+    for name in inst_names:
+        table_html += f"<th>{name}</th>"
+    table_html += "</tr>"
+
+    ticker_options = ""
+    for ticker, inst_holdings in holdings_master.items():
+        total_units = sum(inst_holdings.values())
+        live_price = get_live_stock_price(ticker)
+        table_html += f"<tr><td>{ticker}</td><td>{total_units}</td><td>{live_price if isinstance(live_price, (int, float)) else live_price}</td>"
+        for name in inst_names:
+            units = inst_holdings.get(name, 0)
+            percentage = (units / total_units * 100) if total_units > 0 else 0
+            table_html += f"<td>{percentage:.1f}%</td>"
+        table_html += "</tr>"
+        ticker_options += f"<option value='{ticker}'>{ticker}</option>"
+
+    pie_chart_html = f"""
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <select id="institutionSelect" onchange="updatePieChart()">
+        <option value="">Select an Institution</option>
+    """
+    for name in inst_names:
+        pie_chart_html += f"<option value='{name}'>{name}</option>"
+    pie_chart_html += """
+    </select>
+    <div id="pieChartContainer" style="display: none;">
+        <button onclick="closePieChart()">Close</button>
+        <canvas id="holdingsPieChart" width="400" height="400"></canvas>
+
     </div>
 
     <style>
@@ -311,6 +375,7 @@ def research():
     {% if stock_data %}
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
+
         // Price Chart
         const priceCtx = document.getElementById('priceChart').getContext('2d');
         new Chart(priceCtx, {
@@ -339,6 +404,7 @@ def research():
                             color: 'var(--text)'
                         }
                     }
+
                 },
                 scales: {
                     y: {
@@ -416,7 +482,19 @@ def research():
     </script>
     {% endif %}
     """
+
     return render_template_string(html, 
                                 ticker=ticker,
                                 stock_data=stock_data,
                                 error=error)
+
+
+    html = f"""
+    <h1>Research</h1>
+    {MENU_BAR}
+    <h2>All Institution Holdings</h2>
+    {table_html}
+    <h2>Top 10 Holdings by Institution</h2>
+    {pie_chart_html}
+    """
+    return render_template_string(html)

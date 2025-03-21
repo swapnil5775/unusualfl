@@ -1,7 +1,8 @@
 from flask import Blueprint, render_template_string, request
+
 from common import get_api_data, get_live_stock_price, MENU_BAR, INST_LIST_API_URL, INST_HOLDINGS_API_URL
 
-institution_bp = Blueprint('institution', __name__, url_prefix='/')
+institution_bp = Blueprint('institution', __name__, url_prefix='/institution')
 
 @institution_bp.route('/')
 def home():
@@ -150,6 +151,7 @@ def home():
     return render_template_string(html)
 
 @institution_bp.route('/institution-list')
+
 def institution_list():
     data = get_api_data(INST_LIST_API_URL)
     
@@ -303,6 +305,7 @@ def institution_list():
                     let tableBody = '';
                     if (data.data) {
                         data.data.forEach(holding => {
+
                             const ticker = holding.ticker || 'N/A';
                             const units = holding.units || 'N/A';
                             const value = holding.value || 'N/A';
@@ -315,6 +318,7 @@ def institution_list():
                                     <td>${ticker !== 'N/A' ? '${ticker}' : 'N/A'}</td>
                                 </tr>
                             `.replace('${ticker}', ticker !== 'N/A' ? ticker : 'N/A');
+
                         });
                     }
                     
@@ -407,9 +411,11 @@ def institution_list():
 def institution_list_alt():
     return institution_list()
 
-@institution_bp.route('/institution/holdings')
+@institution_bp.route('/holdings')
 def get_institution_holdings():
+
     from flask import jsonify
+
     name = request.args.get('name')
     data = get_api_data(INST_HOLDINGS_API_URL.format(name=name))
     return jsonify(data)

@@ -6,9 +6,9 @@ import yfinance as yf
 from datetime import datetime, timedelta
 import random
 import ssl
-
 # API configuration
 APIKEY = "bd0cf36c-5072-4b1e-87ee-7e278b8a02e5"  # This is a mock API key
+APIKEY = os.environ.get('UNUSUALWHALES_API_KEY', 'bd0cf36c-5072-4b1e-87ee-7e278b8a02e5')
 INST_LIST_API_URL = "https://api.unusualwhales.com/api/institutions"
 INST_HOLDINGS_API_URL = "https://api.unusualwhales.com/api/institution/{name}/holdings"
 SEASONALITY_API_URL = "https://api.unusualwhales.com/api/seasonality/{ticker}/monthly"
@@ -27,6 +27,9 @@ MOCK_INSTITUTIONS = [
     "Goldman Sachs", "Morgan Stanley", "PIMCO", "Wellington Management",
     "Capital Group"
 ]
+
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
+
 
 MOCK_TICKERS = ["AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA", "JPM", "V", "WMT"]
 
@@ -106,6 +109,10 @@ def get_api_data(url, params=None, verify_ssl=False):
         headers = {"Authorization": f"Bearer {APIKEY}"}
         response = requests.get(url, headers=headers, params=params, verify=verify_ssl)
         response.raise_for_status()
+
+        print(f"Response Status Code: {response.status_code}")
+        print(f"Response Headers: {dict(response.headers)}")
+
         return response.json()
     except Exception as e:
         print(f"API Error: {str(e)}")
@@ -142,6 +149,7 @@ def get_live_stock_price(ticker):
         return round(random.uniform(10, 1000), 2)
 
 MENU_BAR = """
+
 <div class="menu-bar">
     <div class="nav-links">
         <a href="/" class="nav-link"><i class="fas fa-home"></i> Home</a>
@@ -164,6 +172,7 @@ MENU_BAR = """
             <i class="fas fa-sun light-icon"></i>
         </button>
     </div>
+
 </div>
 <style>
     .menu-bar {

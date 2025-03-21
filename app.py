@@ -1,6 +1,7 @@
 from flask import Flask, render_template_string, request, send_from_directory
 import os
 import ssl
+
 from institution_list import institution_bp
 from research import research_bp
 from seasonality import seasonality_bp
@@ -53,7 +54,6 @@ def internal_server_error(e):
         </div>
     """), 500
 
-# Register blueprints
 app.register_blueprint(institution_bp)
 app.register_blueprint(research_bp)
 app.register_blueprint(seasonality_bp)
