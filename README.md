@@ -54,3 +54,38 @@ python app.py
 - yfinance
 - pytz
 - Modern CSS with light/dark mode support
+
+## Deployment
+
+### Render Deployment
+
+The application is configured for automatic deployment to Render:
+
+1. Push changes to the main branch or heroku-deployment branch
+2. GitHub Actions will automatically trigger a deployment to Render
+3. Monitor the deployment status in the GitHub Actions tab
+
+### Setting Up Automated Deployment
+
+To set up automated deployment to Render:
+
+1. Create a Render account and set up a Web Service for your application
+2. Get your Render API key from the Render dashboard
+3. Get your Service ID from your Render service URL
+4. Add the following secrets to your GitHub repository:
+   - `RENDER_API_KEY`: Your Render API key
+   - `RENDER_SERVICE_ID`: Your Render service ID
+5. Push changes to the main branch to trigger deployment
+
+### Manual Deployment
+
+You can also deploy manually to Render:
+
+1. Sign up for [Render](https://render.com/)
+2. Create a new Web Service and select your GitHub repository
+3. Use the following settings:
+   - Runtime: Python
+   - Build Command: `pip install -r requirements.txt`
+   - Start Command: `gunicorn app:app`
+4. Set environment variables in the Render dashboard for any API keys or secrets
+5. Click "Create Web Service" to deploy
