@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - heroku-deployment  # Using the same branch as your existing workflow
+      - render-deployment  # Changed to use the new clean branch
 
 jobs:
   deploy:
