@@ -1,3 +1,10 @@
+"""
+FinanceHub - Main Application Entry Point
+"""
+# Apply service patch to fix problematic dependencies
+# This must come before other imports
+import service_patch
+
 from flask import Flask, render_template_string, request, send_from_directory
 import os
 import ssl

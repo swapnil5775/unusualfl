@@ -7,7 +7,13 @@ python-dotenv==0.19.1
 # websockets and aiohttp are installed via requirements-binary.txt
 # websockets==10.4
 # aiohttp is also excluded as it's installed from binary
-alpaca-trade-api==3.0.0
+
+# IMPORTANT: We're removing these dependencies and using alternative approaches
+# alpaca-trade-api==3.0.0 (removed due to dependency issues)
+# Instead, we'll use alpaca-py which is the newer official SDK
+alpaca-py==0.8.2
+
+# Required dependencies
 pytz==2022.7.1
 pandas==1.5.3
 numpy==1.24.3
