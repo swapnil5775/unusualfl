@@ -297,12 +297,22 @@ def congress_trades():
             border: 1px solid var(--border);
             border-radius: 10px;
             padding: 20px;
+            position: relative;
+            min-height: 350px;
+            display: flex;
+            flex-direction: column;
         }
 
         .chart-card h3 {
             margin: 0 0 20px;
             color: var(--text);
             font-size: 1.1rem;
+        }
+
+        .chart-card canvas {
+            flex: 1;
+            width: 100% !important;
+            height: 300px !important;
         }
 
         .controls-section {
@@ -451,76 +461,161 @@ def congress_trades():
     <script>
         // Chart data from backend
         const chartData = {{ chart_data|tojson }};
+        let memberTypeChart = null;
+        let topTickersChart = null;
         
-        // Initialize charts
+        // Initialize charts with a slight delay to ensure DOM is ready
         document.addEventListener('DOMContentLoaded', function() {
-            // Member Type Distribution Chart
-            const memberTypeCtx = document.getElementById('memberTypeChart').getContext('2d');
-            new Chart(memberTypeCtx, {
-                type: 'doughnut',
-                data: {
-                    labels: chartData.memberTypes.labels,
-                    datasets: [{
-                        data: chartData.memberTypes.data,
-                        backgroundColor: ['#6c5ce7', '#a55eea']
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: {
-                                color: getComputedStyle(document.body).getPropertyValue('--text')
-                            }
-                        }
-                    }
-                }
-            });
-
-            // Top Tickers Chart
-            const topTickersCtx = document.getElementById('topTickersChart').getContext('2d');
-            new Chart(topTickersCtx, {
-                type: 'bar',
-                data: {
-                    labels: chartData.mostTraded.labels,
-                    datasets: [{
-                        label: 'Number of Trades',
-                        data: chartData.mostTraded.data,
-                        backgroundColor: '#6c5ce7'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: false
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                color: getComputedStyle(document.body).getPropertyValue('--text')
-                            },
-                            grid: {
-                                color: getComputedStyle(document.body).getPropertyValue('--border')
-                            }
-                        },
-                        x: {
-                            ticks: {
-                                color: getComputedStyle(document.body).getPropertyValue('--text')
-                            },
-                            grid: {
-                                color: getComputedStyle(document.body).getPropertyValue('--border')
-                            }
-                        }
-                    }
-                }
+            setTimeout(initializeCharts, 100);
+            
+            // Add window resize handler for chart responsiveness
+            window.addEventListener('resize', function() {
+                if (memberTypeChart) memberTypeChart.resize();
+                if (topTickersChart) topTickersChart.resize();
             });
         });
+        
+        function initializeCharts() {
+            const textColor = getComputedStyle(document.body).getPropertyValue('--text').trim();
+            const borderColor = getComputedStyle(document.body).getPropertyValue('--border').trim();
+            
+            // Member Type Distribution Chart
+            const memberTypeCtx = document.getElementById('memberTypeChart');
+            if (memberTypeCtx) {
+                memberTypeChart = new Chart(memberTypeCtx.getContext('2d'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: chartData.memberTypes.labels,
+                        datasets: [{
+                            data: chartData.memberTypes.data,
+                            backgroundColor: ['#6c5ce7', '#a55eea'],
+                            borderWidth: 1,
+                            borderColor: '#fff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        layout: {
+                            padding: 20
+                        },
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    color: textColor,
+                                    padding: 15,
+                                    font: {
+                                        size: 12
+                                    }
+                                }
+                            },
+                            tooltip: {
+                                backgroundColor: 'rgba(0,0,0,0.8)',
+                                padding: 10,
+                                titleFont: {
+                                    size: 14
+                                },
+                                bodyFont: {
+                                    size: 13
+                                }
+                            }
+                        },
+                        animation: {
+                            duration: 1000,
+                            easing: 'easeOutQuart'
+                        },
+                        elements: {
+                            arc: {
+                                borderWidth: 1,
+                                borderColor: '#fff'
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Top Tickers Chart
+            const topTickersCtx = document.getElementById('topTickersChart');
+            if (topTickersCtx) {
+                topTickersChart = new Chart(topTickersCtx.getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels: chartData.mostTraded.labels,
+                        datasets: [{
+                            label: 'Number of Trades',
+                            data: chartData.mostTraded.data,
+                            backgroundColor: '#6c5ce7',
+                            borderColor: '#5549c6',
+                            borderWidth: 1,
+                            borderRadius: 4,
+                            barThickness: 'flex',
+                            minBarLength: 5
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        layout: {
+                            padding: {
+                                top: 10,
+                                right: 10,
+                                bottom: 10,
+                                left: 10
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            tooltip: {
+                                backgroundColor: 'rgba(0,0,0,0.8)',
+                                padding: 10,
+                                titleFont: {
+                                    size: 14
+                                },
+                                bodyFont: {
+                                    size: 13
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    color: textColor,
+                                    font: {
+                                        size: 11
+                                    },
+                                    padding: 5
+                                },
+                                grid: {
+                                    color: borderColor,
+                                    drawBorder: false,
+                                    drawTicks: false
+                                }
+                            },
+                            x: {
+                                ticks: {
+                                    color: textColor,
+                                    font: {
+                                        size: 11
+                                    },
+                                    padding: 5
+                                },
+                                grid: {
+                                    display: false
+                                }
+                            }
+                        },
+                        animation: {
+                            duration: 1000,
+                            easing: 'easeOutQuart'
+                        }
+                    }
+                });
+            }
+        }
 
         let currentSort = { column: null, direction: 'asc' };
 

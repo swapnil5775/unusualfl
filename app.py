@@ -414,21 +414,39 @@ def home():
 def before_request():
     app.jinja_env.globals.update(
         style="""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>FinanceHub</title>
-            <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-            <link href="/static/css/style.css" rel="stylesheet">
-            <script src="/static/js/theme.js"></script>
-        </head>
-        <body data-theme="light">
+        <style>
+            /* This will be included in the page body */
+        </style>
         """
     )
     # Add isinstance to the global template context
     app.jinja_env.globals.update(isinstance=isinstance)
+
+@app.after_request
+def after_request(response):
+    if response.content_type and 'text/html' in response.content_type:
+        html_content = response.get_data(as_text=True)
+        if '{{ style }}' in html_content:
+            # Replace the style placeholder with just the style tag
+            html_content = html_content.replace('{{ style }}', '<style></style>')
+            
+            # Wrap the content in a proper HTML document structure
+            wrapped_content = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FinanceHub</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="/static/css/style.css" rel="stylesheet">
+    <script src="/static/js/theme.js"></script>
+</head>
+<body data-theme="light">
+{html_content}
+</body>
+</html>"""
+            response.set_data(wrapped_content)
+    return response
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
