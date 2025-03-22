@@ -52,85 +52,78 @@ def seasonality():
 
 
 @seasonality_bp.route('/seasonality/per-ticker')
-
 @seasonality_bp.route('/per-ticker', methods=['GET'])
-
 def seasonality_per_ticker():
     ticker = request.args.get('ticker', '').upper()
     monthly_data = None
     error = None
+    monthly_error = None
+    yearly_monthly_error = None
+    yearly_monthly_data = None
+    yearly_performance = None
+    yearly_prices = None
+    years = []
+    price_years = []
+    performance_values = []
+    price_values = []
 
     if ticker:
-
-        monthly_url = SEASONALITY_API_URL.format(ticker=ticker)
-        monthly_response = get_api_data(monthly_url)
-        if "error" in monthly_response:
-            monthly_error = monthly_response["error"]
-        else:
-            monthly_data = monthly_response.get("data", [])
-
-        yearly_monthly_url = f"https://api.unusualwhales.com/api/seasonality/{ticker}/year-month"
-        yearly_monthly_response = get_api_data(yearly_monthly_url)
-        if "error" in yearly_monthly_response:
-            yearly_monthly_error = yearly_monthly_response["error"]
-        else:
-            yearly_monthly_data = yearly_monthly_response.get("data", [])
-
         try:
+            # Get monthly seasonality data
+            monthly_url = SEASONALITY_API_URL.format(ticker=ticker)
+            monthly_response = get_api_data(monthly_url)
+            if "error" in monthly_response:
+                monthly_error = monthly_response["error"]
+            else:
+                monthly_data = monthly_response.get("data", [])
+
+            # Get yearly-monthly data
+            yearly_monthly_url = f"https://api.unusualwhales.com/api/seasonality/{ticker}/year-month"
+            yearly_monthly_response = get_api_data(yearly_monthly_url)
+            if "error" in yearly_monthly_response:
+                yearly_monthly_error = yearly_monthly_response["error"]
+            else:
+                yearly_monthly_data = yearly_monthly_response.get("data", [])
+
             # Verify ticker exists using yfinance
             stock = yf.Ticker(ticker)
             info = stock.info
             if not info.get('regularMarketPrice'):
                 error = f"Invalid ticker symbol: {ticker}"
-            else:
-                # Get seasonality data
-                response = get_api_data(SEASONALITY_API_URL.format(ticker=ticker))
-                if "error" not in response:
-                    monthly_data = response.get("data", [])
         except Exception as e:
-
             error = str(e)
-
-    html = """
-    {{ style }}
-    <div class="container">
-        <h1>Ticker Seasonality Analysis</h1>
-        """ + MENU_BAR + """
-        
-        <div class="card">
-            <form method="GET" class="search-form">
-                <div class="input-group">
-                    <i class="fas fa-search"></i>
-                    <input type="text" name="ticker" value="{{ ticker or '' }}" 
-                           placeholder="Enter ticker symbol (e.g., AAPL, MSFT)" required>
-
             yearly_performance = {"error": f"Error fetching performance: {str(e)}"}
             yearly_prices = {"error": f"Error fetching prices: {str(e)}"}
 
-    etf_info = None
-    etf_info_error = None
-    if ticker:
-        etf_info_response = get_api_data(ETF_INFO_API_URL.format(ticker=ticker))
-        if "error" in etf_info_response:
-            etf_info_error = etf_info_response["error"]
-        else:
-            etf_info = etf_info_response.get("data", {})
+        # Get ETF info if available
+        etf_info = None
+        etf_info_error = None
+        try:
+            etf_info_response = get_api_data(ETF_INFO_API_URL.format(ticker=ticker))
+            if "error" in etf_info_response:
+                etf_info_error = etf_info_response["error"]
+            else:
+                etf_info = etf_info_response.get("data", {})
+        except Exception as e:
+            etf_info_error = str(e)
 
-    common_years = []
-    performance_values_filtered = []
-    price_values_filtered = []
-    if ticker and yearly_performance and "error" not in yearly_performance and yearly_prices and "error" not in yearly_prices:
-        common_years = list(set(years) & set(price_years))
-        common_years.sort()
-        performance_values_filtered = [
-            performance_values[years.index(year)] if year in years and years.index(year) < len(performance_values) else "N/A"
-            for year in common_years
-        ]
-        price_values_filtered = [
-            price_values[price_years.index(year)] if year in price_years and price_years.index(year) < len(price_values) else "N/A"
-            for year in common_years
-        ]
+        # Process year data for charts
+        common_years = []
+        performance_values_filtered = []
+        price_values_filtered = []
+        if ticker and yearly_performance and "error" not in yearly_performance and yearly_prices and "error" not in yearly_prices:
+            common_years = list(set(years) & set(price_years))
+            common_years.sort()
+            performance_values_filtered = [
+                performance_values[years.index(year)] if year in years and years.index(year) < len(performance_values) else "N/A"
+                for year in common_years
+            ]
+            price_values_filtered = [
+                price_values[price_years.index(year)] if year in price_years and price_years.index(year) < len(price_values) else "N/A"
+                for year in common_years
+            ]
 
+    # Prepare context for template
     context = {
         'ticker': ticker,
         'monthly_data': monthly_data,
@@ -147,24 +140,20 @@ def seasonality_per_ticker():
         'MENU_BAR': MENU_BAR
     }
 
+    # Start of HTML template
     html = """
-    <h1>Seasonality - Per Ticker</h1>
-    {{ MENU_BAR | safe }}
-    <div style="display: flex; flex-wrap: wrap;">
-        <div style="flex: 1; min-width: 300px; margin-bottom: 20px;">
-            <h2>ETF Info for {{ ticker or '' }}</h2>
-            {% if etf_info_error %}<p style="color: red;">Error fetching ETF Info: {{ etf_info_error }}</p>{% endif %}
-            <table border='1' {% if not etf_info %}style="display: none;"{% endif %} id="etfInfoTable">
-                <tr><th>Field</th><th>Value</th></tr>
-    """
-    if etf_info:
-        for key, value in etf_info.items():
-            if value is not None:
-                html += f"<tr><td>{key.replace('_', ' ').title()}</td><td>{{ etf_info['{key}'] }}</td></tr>"
-    html += """
-            </table>
-
-        </div>
+    {{ style }}
+    <div class="container">
+        <h1>Seasonality - Per Ticker</h1>
+        {{ MENU_BAR | safe }}
+        
+        <div class="card">
+            <form method="GET" class="search-form">
+                <div class="input-group">
+                    <i class="fas fa-search"></i>
+                    <input type="text" name="ticker" value="{{ ticker or '' }}" 
+                           placeholder="Enter ticker symbol (e.g., AAPL, MSFT)" required>
+                </div>
                 <button type="submit" class="btn">Analyze</button>
             </form>
 
@@ -172,31 +161,7 @@ def seasonality_per_ticker():
             {% if yearly_monthly_error %}<p style="color: red;">Error (Year-Month Data): {{ yearly_monthly_error }}</p>{% endif %}
             {% if not monthly_error and not monthly_data %}<p>No monthly data available for ticker {{ ticker or '' }}</p>{% endif %}
             {% if not yearly_monthly_error and not yearly_monthly_data %}<p>No year-month data available for ticker {{ ticker or '' }}</p>{% endif %}
-
-            <h2>Monthly Seasonality Statistics</h2>
-            <table border='1' {% if not monthly_data %}style="display: none;"{% endif %} id="monthlySeasonalityTable">
-                <tr>
-                    <th>Month</th>
-                    <th>Avg Change</th>
-                    <th>Max Change</th>
-                    <th>Median Change</th>
-                    <th>Min Change</th>
-                    <th>Positive Closes</th>
-                    <th>Positive Months %</th>
-                    <th>Years</th>
-                </tr>
-    """
-    if monthly_data:
-        for item in monthly_data:
-            avg_change = item.get('avg_change', 0.0)
-            max_change = item.get('max_change', 0.0)
-            median_change = item.get('median_change', 0.0)
-            min_change = item.get('min_change', 0.0)
-            positive_months_perc = item.get('positive_months_perc', 0.0) * 100
-            positive_closes = item.get('positive_closes', 0)
-            years = item.get('years', 'N/A')
-            month = item.get('month', 'N/A')
-
+        </div>
 
         {% if error %}
         <div class="alert alert-error">
@@ -228,7 +193,7 @@ def seasonality_per_ticker():
                             <th>Min Change (%)</th>
                             <th>Positive Months</th>
                             <th>Success Rate (%)</th>
-                </tr>
+                        </tr>
                     </thead>
                     <tbody>
                     {% for item in monthly_data %}
@@ -244,14 +209,61 @@ def seasonality_per_ticker():
                             <td class="negative">{{ "%.2f"|format(item.min_change) }}%</td>
                             <td>{{ item.positive_closes }}/{{ item.years }}</td>
                             <td>{{ "%.1f"|format(item.positive_months_perc * 100) }}%</td>
-            </tr>
+                        </tr>
                     {% endfor %}
                     </tbody>
-        </table>
-
+                </table>
             </div>
         </div>
         {% endif %}
+
+        {% if etf_info %}
+        <div class="card">
+            <h2>ETF Info for {{ ticker }}</h2>
+            <table>
+                <tr><th>Field</th><th>Value</th></tr>
+                {% for key, value in etf_info.items() %}
+                    {% if value is not none %}
+                    <tr>
+                        <td>{{ key|replace('_', ' ')|title }}</td>
+                        <td>{{ value }}</td>
+                    </tr>
+                    {% endif %}
+                {% endfor %}
+            </table>
+        </div>
+        {% endif %}
+
+        {% if yearly_monthly_data %}
+        <div class="card">
+            <h2>15-Year Monthly Return History</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Year</th>
+                        <th>Month</th>
+                        <th>Open</th>
+                        <th>Close</th>
+                        <th>Change</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in yearly_monthly_data %}
+                    <tr>
+                        <td>{{ item.year }}</td>
+                        <td>{{ item.month }}</td>
+                        <td>{{ "%.2f"|format(item.open|float) if item.open else "N/A" }}</td>
+                        <td>{{ "%.2f"|format(item.close|float) if item.close else "N/A" }}</td>
+                        <td class="{{ 'positive' if item.change|float > 0 else 'negative' }}">
+                            {{ "%.2f"|format(item.change|float) }}%
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+        
     </div>
 
     <style>
@@ -261,45 +273,10 @@ def seasonality_per_ticker():
             align-items: center;
         }
 
-        <h2>Yearly Analysis for {{ ticker or '' }}</h2>
-        <div style="display: flex; flex-wrap: wrap; justify-content: space-around; margin-top: 20px; gap: 20px;">
-            <div style="flex: 1; min-width: 300px; max-width: 400px;">
-                <h3>Price Action (Line)</h3>
-                <canvas id="yearlyPriceChart"></canvas>
-            </div>
-            <div style="flex: 1; min-width: 300px; max-width: 400px;">
-                <h3>Performance (Bar)</h3>
-                <canvas id="yearlyBarChart"></canvas>
-            </div>
-            <div style="flex: 1; min-width: 300px; max-width: 400px;">
-                <h3>Combined Performance & Price</h3>
-                <canvas id="combinedChart"></canvas>
-            </div>
-        </div>
-        <h2>15-Year Monthly Return History</h2>
-        <table border='1' {% if not yearly_monthly_data %}style="display: none;"{% endif %} id="yearlyMonthlySeasonalityTable">
-            <tr>
-                <th>Year</th>
-                <th>Month</th>
-                <th>Open</th>
-                <th>Close</th>
-                <th>Change</th>
-            </tr>
-    """
-    if yearly_monthly_data:
-        for item in yearly_monthly_data:
-            change = float(item.get('change', 0.0)) if item.get('change') else 0.0
-            open_price = float(item.get('open', 0.0)) if item.get('open') else 0.0
-            close_price = float(item.get('close', 0.0)) if item.get('close') else 0.0
-            year = item.get('year', 'N/A')
-            month = item.get('month', 'N/A')
-
-
         .input-group {
             position: relative;
             flex: 1;
         }
-
 
         .input-group i {
             position: absolute;
@@ -404,31 +381,6 @@ def seasonality_per_ticker():
         
         new Chart(monthlyCtx, {
             type: 'bar',
-
-            html += f"""
-            <tr>
-                <td>{year}</td>
-                <td>{month}</td>
-                <td>{open_price:.2f}</td>
-                <td>{close_price:.2f}</td>
-                <td>{format_change_with_color(change)}</td>
-            </tr>
-            """
-    html += """
-        </table>
-    </div>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script>
-        const commonYears = {{ common_years | tojson }};
-        const performanceValuesFiltered = {{ performance_values_filtered | tojson }};
-        const priceValuesFiltered = {{ price_values_filtered | tojson }};
-        const performanceColors = performanceValuesFiltered.map(val => val >= 0 ? 'rgba(75, 192, 192, 0.7)' : 'rgba(255, 99, 132, 0.7)');
-        const performanceBorderColors = performanceValuesFiltered.map(val => val >= 0 ? 'rgba(75, 192, 192, 1)' : 'rgba(255, 99, 132, 1)');
-
-        const priceCtx = document.getElementById('yearlyPriceChart').getContext('2d');
-        new Chart(priceCtx, {
-            type: 'line',
-
             data: {
                 labels: months,
                 datasets: [{
@@ -475,12 +427,10 @@ def seasonality_per_ticker():
             }
         });
 
-
         // Success Rate Chart
         const successCtx = document.getElementById('positiveMonthsChart').getContext('2d');
         new Chart(successCtx, {
             type: 'line',
-
             data: {
                 labels: months,
                 datasets: [{
@@ -495,34 +445,10 @@ def seasonality_per_ticker():
             options: {
                 responsive: true,
                 plugins: {
-
                     title: {
                         display: true,
                         text: 'Monthly Success Rate',
                         color: 'var(--text)'
-
-                    legend: { display: false }
-                }
-            }
-        });
-
-        const combinedCtx = document.getElementById('combinedChart').getContext('2d');
-        new Chart(combinedCtx, {
-            type: 'bar',
-            data: {
-                labels: commonYears,
-                datasets: [
-                    {
-                        type: 'line',
-                        label: 'Yearly Closing Price',
-                        data: priceValuesFiltered,
-                        borderColor: 'rgba(54, 162, 235, 1)',
-                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
-                        fill: true,
-                        tension: 0.3,
-                        pointRadius: 3,
-                        yAxisID: 'y2'
-
                     },
                     legend: {
                         labels: {
@@ -555,13 +481,6 @@ def seasonality_per_ticker():
     </script>
     {% endif %}
     """
-
-    return render_template_string(html, 
-                                ticker=ticker,
-                                monthly_data=monthly_data,
-                                error=error)
-
-# The main application block has been removed as it is not needed in a blueprint file.
 
     return render_template_string(html, **context)
 
@@ -722,6 +641,7 @@ def ai_summary():
     """
 
     try:
+        import openai
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[
@@ -735,4 +655,4 @@ def ai_summary():
         return jsonify({"summary": summary[:4]})
     except Exception as e:
         logger.error(f"OpenAI API error: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"summary": ["Unable to generate AI summary. OpenAI service may be unavailable."]})
